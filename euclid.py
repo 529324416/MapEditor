@@ -5,10 +5,7 @@
 #        the layout of euclid window just like imgui but it based on PyQt5 
 #        so it's not dynamic but static 
 
-from ctypes import WinDLL
-import sys
 from PyQt5.QtWidgets import QApplication, QWidget, QLabel, QPushButton
-
 
 class _EuclidObject:
     ''' horizontal object would layout self in a horizontal line '''
@@ -47,10 +44,10 @@ class _EuclidObject:
         self.__last = other
         self.__posfunc = self.__repos_as_horizontal if is_horizontal else self.__repos_as_vertical
 
-    def repos(self, space):
+    def repos(self, padding):
         '''adjust the position and size of self'''
         self.__sizefunc()
-        self.__posfunc(space)
+        self.__posfunc(padding)
 
     def __resize_as_fixed(self):
         pass
@@ -64,33 +61,24 @@ class _EuclidObject:
     def __resize_as_elastic(self):
         self.resize(int(self.__size[0] * self.parent().width()), int(self.__size[1] * self.parent().height()))
 
-    def __repos_as_head(self, space):
-        self.move(space, space)
+    def __repos_as_head(self, padding):
+        self.move(padding, padding)
 
-    def __repos_as_horizontal(self, space):
-        self.move(self.__last.width() + space + self.__last.x(), self.__last.y())
+    def __repos_as_horizontal(self, padding):
+        self.move(self.__last.width() + padding + self.__last.x(), self.__last.y())
 
-    def __repos_as_vertical(self, space):
-        self.move(self.__last.x(), self.__last.height() + space + self.__last.y())
-
-
-
+    def __repos_as_vertical(self, padding):
+        self.move(self.__last.x(), self.__last.height() + padding + self.__last.y())
 
 class EuclidWidget(_EuclidObject, QWidget):
     def __init__(self, size=None, **kwargs) -> None:
         super().__init__(parent=None, **kwargs)
         self.init((self.width(), self.height()) if size == None else size)
 
-
-
-
 class EuclidLabel(_EuclidObject, QLabel):
     def __init__(self, size=None, **kwargs) -> None:
         super().__init__(parent=None, **kwargs)
         self.init((self.width(), self.height()) if size == None else size)
-
-
-
 
 class EuclidButton(_EuclidObject, QPushButton):
     def __init__(self, size=None, **kwargs) -> None:
@@ -102,21 +90,39 @@ class EuclidContainer(EuclidWidget):
     as a container, and itself would also be treated as a EuclidWidget, and it 
     can be add to another EuclidContainer'''
 
-    def __init__(self, size=None, space=5, **kwargs):
+    def __init__(self, size=None, padding=5, **kwargs):
         super().__init__(size=size, **kwargs)
         self.__widgets = list()
-        self.__current = None
-        self.__space = space
+        self.__horizontal_last = None
+        self.__horizontal_head = None
+        self.__padding = padding
 
     def __add(self, widget: EuclidWidget, is_horizontal=False):
         '''add a new EuclidWidget to container, and new widget would as vertical object 
         connected to last object'''
 
         widget.setParent(self)
-        if self.__current != None:
-            widget.connect(self.__current, is_horizontal)
-        self.__current = widget
         self.__widgets.append(widget)
+        if is_horizontal:
+            # add a horizontal widget
+
+            if self.__horizontal_head is None:
+                # the first widget is added as horizontal
+
+                self.__horizontal_head = widget
+                self.__horizontal_last = widget
+            else:
+                widget.connect(self.__horizontal_last, True)
+                self.__horizontal_last = widget   
+        else:
+            # add a vertical widget
+            if self.__horizontal_head is None:
+                self.__horizontal_head = widget
+                self.__horizontal_last = widget
+            else:
+                widget.connect(self.__horizontal_head, False)
+                self.__horizontal_head = widget
+                self.__horizontal_last = widget
 
     def addh(self, widget: EuclidWidget):
         self.__add(widget, True)
@@ -126,43 +132,4 @@ class EuclidContainer(EuclidWidget):
 
     def resizeEvent(self, evt) -> None:
         for w in self.__widgets:
-            w.repos(self.__space)
-        
-
-class NewLabel(EuclidLabel):
-
-    def __init__(self, size: tuple):
-        super().__init__(size=size)
-
-
-class NewButton(EuclidButton):
-    def __init__(self, size: tuple):
-        super().__init__(size=size)
-
-
-
-class Window(EuclidContainer):
-
-    def __init__(self):
-        super().__init__(size=(1, 1))
-        self.resize(1000, 600)
-        self.container = EuclidContainer(size=(0.3, 0.3))
-
-        btnsize = (100, 30)
-        self.container.add(NewButton(btnsize))
-        self.container.add(NewButton(btnsize))
-        self.container.add(NewButton(btnsize))
-
-        self.label = NewLabel((0.3, 60))
-        self.label.setStyleSheet("background-color: #434e57;")
-        self.add(self.label)
-        self.addh(self.container)
-
-        self.show()
-
-        
-
-
-app = QApplication(sys.argv)
-window = Window()
-exit(app.exec_())
+            w.repos(self.__padding)
