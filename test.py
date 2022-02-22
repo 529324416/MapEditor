@@ -1,45 +1,23 @@
 import sys
 from PyQt5.QtWidgets import QApplication
-from euclid import EuclidContainer, EuclidButton, EuclidLabel
+from euclid import *
 
-class NewLabel(EuclidLabel):
-
-    def __init__(self, size: tuple):
-        super().__init__(size=size)
-
-class NewButton(EuclidButton):
-    def __init__(self, size: tuple):
-        super().__init__(size=size)
-
-
-
-class Window(EuclidContainer):
+class Window(QWidget):
 
     def __init__(self):
-        super().__init__(size=(1, 1))
+        super().__init__(None)
+        self.setObjectName("EuclidBaseWindow")
         self.resize(1000, 600)
-        
-
-        btnsize = (100, 30)
-        btn1 = NewButton(btnsize)
-        btn1.setText("1")
-        btn2 = NewButton(btnsize)
-        btn2.setText("2")
-        btn3 = NewButton(btnsize)
-        btn3.setText("3")
-
-        self.addh(btn1)
-        self.addh(btn2)
-        self.add(btn3)
-
-        self.container = EuclidContainer(size=(0.5, 300))
-        self.addh(self.container)
-
-        label = NewLabel(size=(1, 1))
-        label.setStyleSheet("background-color:#434e57;")
-        self.container.add(label)
-
+        self.build()
         self.show()
+
+    def build(self):
+        
+        with open("./style.qss", encoding='utf-8') as f:
+            self.setStyleSheet(f.read())
+        self.window = EuclidWindow(parent=self)
+        self.window.setObjectName("EuclidWindow")
+        self.window.resize(200, 250)
 
 
 app = QApplication(sys.argv)

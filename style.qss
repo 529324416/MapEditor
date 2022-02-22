@@ -1,0 +1,36 @@
+#EuclidBaseWindow{
+    background-color:#43434f;
+}
+#EuclidWindow{
+    background-color:#272736;
+    border-radius:5px;
+    border:1px solid grey;
+}
+#EuclidSizeGrip{
+    background-color:#dbd4d4;
+    border-radius:6px;
+}
+#EuclidSizeGrip:hover{
+    background-color:#ffffeb;
+}
+#EuclidTitleBar{
+    background-color:#465374;
+    border-top-left-radius:5px;
+    border-top-right-radius:5px;
+    border-right: 1px solid grey;
+    border-left: 1px solid grey;
+    border-top: 1px solid grey;
+}
+#EuclidTitleContent{
+    color:#ffffeb;
+}
+#EuclidCloseButton{
+    border-radius:6px;
+    background-color:#74adbb;
+}
+#EuclidCloseButton:hover{
+    background-color:#acd2db;
+}
+#EuclidCloseButton:pressed{
+    background-color:#c9e5ec;
+}

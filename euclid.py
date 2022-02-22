@@ -5,7 +5,57 @@
 #        the layout of euclid window just like imgui but it based on PyQt5 
 #        so it's not dynamic but static 
 
-from PyQt5.QtWidgets import QApplication, QWidget, QLabel, QPushButton
+from PyQt5.QtWidgets import QApplication, QWidget, QLabel, QPushButton, QHBoxLayout
+from PyQt5.QtCore import QPoint, QSize
+
+
+def move_window(window: QWidget, evt, pos: QPoint):
+    '''drag window by mouse when mouse is moving
+    compute the offset from mouse moving, and add to window 
+    @window: a widget
+    @evt: QMouseMoveEvent, this function must be called in mouseMoveEvent
+    @pos: the position of mouse click '''
+
+    offset = evt.pos() - pos            # get mouse offset
+    window.move(window.pos() + offset)
+    window.parent().update()
+
+def resize_window(window: QWidget, evt, pos: QPoint):
+    '''adjust window size by sizegrip button, button would 
+    record the offset of mosue move, and send to window 
+    for adjusting size
+    @window: target window
+    @evt: QMouseMoveEvent
+    @pos: the position of mouse click'''
+
+    offset = evt.pos() - pos
+    window.resize(window.width() + offset.x(), window.height() + offset.y())
+    window.parent().update()
+
+
+def label_size(label: QLabel):
+    ''' compute the size of label '''
+
+    return label.fontMetrics().boundingRect(label.text()).size()
+
+
+class EuclidNames:
+
+    WINDOW = "EuclidWindow"
+    TITLEBAR = "EuclidTitleBar"
+    TITLEBAR_CONTENT = "EuclidTitleContent"
+    TITLEBAR_CLOSEBTN = "EuclidCloseButton"
+    TITLEBAR_LOCKBTN_NORMAL = "EuclidLockButtonNormal"
+    TITLEBAR_LOCKBTN_LOCKED = "EuclidLockButtonLocked"
+    SIZEGRIP = "EuclidSizeGrip"
+    CONTAINER = "EuclidContainer"
+    
+
+
+class EucildUtils:
+
+    def clamp(value, _min, _max):
+        return max(min(_max, value), _min)
 
 class _EuclidObject:
     ''' horizontal object would layout self in a horizontal line '''
@@ -133,3 +183,88 @@ class EuclidContainer(EuclidWidget):
     def resizeEvent(self, evt) -> None:
         for w in self.__widgets:
             w.repos(self.__padding)
+
+class _EuclidMoveable(QLabel):
+    '''make widget movable'''
+
+    def __init__(self, parent=None, **kwargs):
+        QLabel.__init__(self, parent=parent, **kwargs)
+        self._can_move = False
+
+    def mousePressEvent(self, ev):
+        self._can_move = True
+        self._pos = ev.pos()
+
+    def mouseMoveEvent(self, ev):
+        if self._can_move:
+            move_window(self, ev, self._pos)
+
+    def mouseReleaseEvent(self, ev):
+        self._can_move = False
+
+class _EuclidSizeGrip(_EuclidMoveable):
+
+    def __init__(self, size, parent=None, **kwargs):
+        super().__init__(parent=parent, **kwargs)
+        self.setObjectName(EuclidNames.SIZEGRIP)
+        self.setFixedSize(*size)
+
+    def mouseMoveEvent(self, ev):
+        '''adjust the size of parent while moving self'''
+
+        if self._can_move:
+            resize_window(self.parent(), ev, self._pos)
+
+class _EuclidMiniButton(QPushButton):
+    def __init__(self, parent, size=(12, 12), **kwargs):
+        super().__init__(parent=parent, **kwargs)
+        self.setFixedSize(*size)
+
+class _EuclidTitleBar(QLabel):
+    '''Euclid Titlt Bar '''
+
+    def __init__(self, height, parent, title="Euclid Window", padding=5, btnsize=12, **kwargs):
+        super().__init__(parent=parent, **kwargs)
+        self.setObjectName(EuclidNames.TITLEBAR)
+        self.setFixedHeight(height)
+        self.move(QPoint())
+        self.padding = padding
+
+        self._title = QLabel(self)
+        self._title.setObjectName(EuclidNames.TITLEBAR_CONTENT)
+        self.set_title(title)
+
+        self._closebtn = _EuclidMiniButton(self, size=(btnsize, btnsize))
+        self._closebtn.clicked.connect(lambda:self.parent().hide())
+        self._closebtn.setObjectName(EuclidNames.TITLEBAR_CLOSEBTN)
+        self._closebtn_padding = padding + btnsize
+
+    def set_title(self, text):
+        ''' set window title content, and when content has changed
+        the label width would change too'''
+
+        self._title.setText(text)
+        if len(text) == 0:
+            text = EuclidNames.WINDOW
+        size = self._title.fontMetrics().boundingRect(text).size()
+        self._title.resize(size)
+        self._title.move(self.padding, int((self.height() - size.height())/2))
+
+    def resizeEvent(self, ev):
+        '''adjust position of closebutton and lockbutton '''
+        self._closebtn.move(self.width() - self._closebtn_padding, self.padding)
+    
+
+class EuclidWindow(_EuclidMoveable):
+
+    def __init__(self, parent=None, padding=5, sizegrip_size=12, titlebar_height=20, **kwargs):
+        super().__init__(parent=parent, **kwargs)
+
+        self._titlebar = _EuclidTitleBar(titlebar_height, self)
+        self._sizegrip = _EuclidSizeGrip((sizegrip_size, sizegrip_size), self)
+        self._sizegrip_offset = padding + sizegrip_size
+        
+
+    def resizeEvent(self, a0):
+        self._sizegrip.move(self.width() - self._sizegrip_offset, self.height() - self._sizegrip_offset)
+        self._titlebar.resize(self.width(), self._titlebar.height())
