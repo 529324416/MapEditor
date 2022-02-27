@@ -1,8 +1,9 @@
 #EuclidBaseWindow{
-    background-color:#43434f;
+    /* background-color:#43434f; */
+    border-image:url(./test.png);
 }
 #EuclidWindow{
-    background-color:#272736;
+    background-color:rgba(39, 39, 54, 242);
     border-radius:5px;
     border:1px solid grey;
 }
@@ -33,4 +34,24 @@
 }
 #EuclidCloseButton:pressed{
     background-color:#c9e5ec;
+}
+#EuclidLockButtonNormal{
+    border-radius:6px;
+    background-color:#79be91;
+}
+#EuclidLockButtonNormal:hover{
+    background-color:#a8d8b8;
+}
+#EuclidLockButtonNormal:pressed{
+    background-color:#cff0da;
+}
+#EuclidLockButtonLocked{
+    border-radius:6px;
+    background-color:#898989;
+}
+#EuclidLockButtonLocked:hover{
+    background-color:#a9a9a9;
+}
+#EuclidLockButtonLocked:pressed{
+    background-color:#cdcdcd;
 }
