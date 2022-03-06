@@ -7,6 +7,14 @@
     border-radius:5px;
     border:1px solid grey;
 }
+#EuclidContainer{
+    background:#4d4d7e;
+}
+#EuclidContainerHolder{
+    border:1px solid grey;
+    border-radius:5px;
+}
+#EuclidContainerHolderNonBorder{}
 #EuclidSizeGrip{
     background-color:#dbd4d4;
     border-radius:6px;
@@ -54,4 +62,55 @@
 }
 #EuclidLockButtonLocked:pressed{
     background-color:#cdcdcd;
+}
+#EuclidButton{
+    border-radius:2px;
+    background-color:#546799;
+    color:#ffffeb;
+}
+#EuclidButton:hover{
+    background-color:#5a80a7;
+}
+#EuclidButton:pressed{
+    background-color:#464a73;
+}
+QScrollArea{
+    background:rgba(0, 0, 0, 0);
+    border:none;
+}
+QScrollBar:vertical{
+    border:none;
+    width:10px;
+    border-radius:0px;
+    margin:0px 0px 0px 0px;
+    background-color:rgba(0,0,0,0);
+}
+QScrollBar::handle:vertical{
+    background-color:#5e5e6c;
+    border-radius:5px;
+}
+QScrollBar::handle:vertical:hover{
+    background-color:#43434f;
+}
+QScrollBar::handle:vertical:pressed{
+    background-color:#5e5e6c;
+}
+QScrollBar::sub-line:vertical{
+    border:none;
+    height:0px;
+    subcontrol-position:top;
+    subcontrol-origin:margin;
+}
+QScrollBar::add-line:vertical{
+    border:none;
+    height:0px;
+    subcontrol-position:bottom;
+    subcontrol-origin:margin;
+}
+
+QScrollBar::up-arrow:vertical, QScrollBar::down-arrow:vertical{
+    background:none;
+}
+QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical{
+    background:none;
 }
