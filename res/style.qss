@@ -1,9 +1,14 @@
 #EuclidBaseWindow{
     /* background-color:#43434f; */
-    border-image:url(./test.png);
+    border-image:url(./res/test.png);
 }
 #EuclidWindow{
     background-color:rgba(39, 39, 54, 242);
+    border-radius:5px;
+    border:1px solid grey;
+}
+#EuclidWindowAlpha{
+    background-color:rgba(39, 39, 54, 100);
     border-radius:5px;
     border:1px solid grey;
 }
@@ -14,7 +19,9 @@
     border:1px solid grey;
     border-radius:5px;
 }
-#EuclidContainerHolderNonBorder{}
+#EuclidContainerHolderNonBorder{
+
+}
 #EuclidSizeGrip{
     background-color:#dbd4d4;
     border-radius:6px;
@@ -63,17 +70,6 @@
 #EuclidLockButtonLocked:pressed{
     background-color:#cdcdcd;
 }
-#EuclidButton{
-    border-radius:2px;
-    background-color:#546799;
-    color:#ffffeb;
-}
-#EuclidButton:hover{
-    background-color:#5a80a7;
-}
-#EuclidButton:pressed{
-    background-color:#464a73;
-}
 QScrollArea{
     background:rgba(0, 0, 0, 0);
     border:none;
@@ -113,4 +109,85 @@ QScrollBar::up-arrow:vertical, QScrollBar::down-arrow:vertical{
 }
 QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical{
     background:none;
+}
+
+
+
+/* Euclid Base Widgets */
+
+/* button */
+#EuclidButton{
+    border-radius:2px;
+    background-color:#546799;
+    color:#ffffeb;
+}
+#EuclidButton:hover{
+    background-color:#5a80a7;
+}
+#EuclidButton:pressed{
+    background-color:#464a73;
+}
+
+#EuclidButtonRed{
+    border-radius:2px;
+    background-color:#9f3847;
+    color:#ffffeb;
+}
+#EuclidButtonRed:hover{
+    background-color:#c74446;
+}
+#EuclidButtonRed:pressed{
+    background-color:#6e2731;
+}
+
+/* label */
+#EuclidLabel{
+    border-radius:2px;
+    color:#ffffeb;
+}
+#EuclidLabelError{
+    border-radius:2px;
+    color:#e22333;
+}
+#EuclidLabelWarning{
+    border-radius:2px;
+    color:#fcf660;
+}
+#EuclidLabelSuccess{
+    border-radius:2px;
+    color:rgb(0, 255, 0);
+}
+
+
+
+/* dialog */
+#EuclidDialog{
+    background-color:rgba(39,39,54,242);
+    border-radius:2px;
+    border:1px solid grey;
+}
+
+/* image */
+#EuclidImage{
+    background-color:rgba(0,0,0,0);
+    border-radius:5px;
+    border:1px solid grey;
+}
+#EuclidImageNonBorder{
+    background-color:rgba(0,0,0,0);
+    border:none;
+}
+
+/* mini indicator */
+#EuclidMiniIndicator{
+    background-color:#b2d942;
+    border-radius:6px;
+}
+#EuclidMiniIndicatorRun{
+    background-color:red;
+    border-radius:6px;
+}
+#EuclidMiniIndicatorInvalid{
+    background-color:grey;
+    border-radius:6px;
 }

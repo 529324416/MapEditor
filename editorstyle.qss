@@ -1,0 +1,62 @@
+QGraphicsView{
+    background-color: rgba(0, 0, 0, 0);
+    border-radius: 5px;
+    border:1px solid grey;
+}
+QLineEdit{
+    background-color:rgba(0, 0, 0, 255);
+    border-radius: 2px;
+    border:1px solid grey;
+    selection-background-color: rgba(0, 0, 0, 255);
+    color:#ffffeb;
+}
+@font-face{
+    font-family:zpix;
+    url("./fonts/zpix.ttf");
+}
+
+#EditorBrushContainerList{
+    background-color: rgba(0, 0, 0, 0);
+    border:1px solid grey;
+    border-radius:2px;
+    color:#ffffeb;
+    outline:none;
+    font-family:zpix;
+    text-align:center;
+}
+#EditorBrushContainerList::item{
+    background: rgba(0, 0, 0, 0);
+    border:none;
+    height:25px;
+}
+#EditorBrushContainerList::item:hover{
+    background: rgba(150, 150, 150, 100);
+}
+#EditorBrushContainerList::item:selected{
+    background: rgba(120, 120, 120, 100);
+    border:none;
+}
+#EditorBrushContainerList::item:selected:active{
+    background: rgba(120, 120, 120, 100);
+    border:none;
+}
+#EditorBrushContainerList::item:selected:!active{
+    background: rgba(120, 120, 120, 100);
+    border:none;
+    color:#ffffeb;
+}
+#EditorBrushContainerList::item:alternate{
+    background: #EEEEEE;
+    border:none;
+}
+
+
+
+#Indicator{
+    background:rgba(0,0,0,0);
+    border:1px solid grey;
+    border-radius:2px;
+}
+#Indicator:hover{
+    border:1px solid #66ffe3;
+}

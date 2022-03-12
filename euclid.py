@@ -5,13 +5,16 @@
 #        the layout of euclid window just like imgui but it based on PyQt5 
 #        so it's not dynamic but static 
 
-from PyQt5.QtWidgets import QApplication, QWidget, QLabel, QPushButton, QScrollArea
-from PyQt5.QtCore import QPoint, QSize, Qt
+from PyQt5.QtWidgets import *
+from PyQt5.QtCore import *
 import hashlib
 import json
 import os
 
 EUCLID_MINSIZE = (100, 100)
+
+def fullsize(size):
+    return size
 
 def halfsize(size):
     return QSize(
@@ -61,7 +64,7 @@ def generate_md5(text:str):
     _5.update(text.encode())
     return _5.hexdigest()
 
-def store_window_status(windows:list, filepath:str):
+def store_window_status(baseWindow, windows:list, filepath:str):
     '''save all windows' size and positions'''
 
     o = dict()
@@ -73,12 +76,16 @@ def store_window_status(windows:list, filepath:str):
             "locked":window.is_locked
         }
         window_list.setdefault(window.window_id, cnt)
+    o.setdefault("base_window", {
+        "size":[baseWindow.width(), baseWindow.height()],
+        "pos":[baseWindow.x(), baseWindow.y()]
+    })
     o.setdefault("top", EuclidWindow.top.window_id)
     o.setdefault("window_list", window_list)
     with open(filepath, "w", encoding='utf-8') as f:
         json.dump(o, f)
 
-def restore_window_status(filepath:str):
+def restore_window_status(baseWindow, filepath:str):
     '''restore all windows' size and positions'''
 
     if os.path.exists(filepath):
@@ -92,8 +99,12 @@ def restore_window_status(filepath:str):
                 win.move(*kv[1]["pos"])
                 win.resize(*kv[1]["size"])
                 win.set_lock(kv[1]["locked"])
+
+            window = o["base_window"]
+            baseWindow.resize(*window["size"])
+            baseWindow.move(*window["pos"])
         except Exception as e:
-            pass
+            print(e)
 
 def next_horizontal_pos(w:QWidget, space:int):
     return w.x() + w.width() + space, w.y()
@@ -104,7 +115,9 @@ def next_vertical_pos(w: QWidget, space:int):
 
 class EuclidNames:
 
+    # euclid base concept
     WINDOW = "EuclidWindow"
+    ALPHA_WINDOW = "EuclidWindowAlpha"
     CONTAINER = "EuclidContainer"
     CONTAINER_HOLDER = "EuclidContainerHolder"
     CONTAINER_HOLDER_NONBORDER = "EuclidContainerHolderNonBorder"
@@ -115,8 +128,22 @@ class EuclidNames:
     TITLEBAR_LOCKBTN_LOCKED = "EuclidLockButtonLocked"
     SIZEGRIP = "EuclidSizeGrip"
 
-
+    # euclid widgets
     BUTTON = "EuclidButton"
+    BUTTON_RED = "EuclidButtonRed"
+    LABEL = "EuclidLabel"
+    LABEL_ERROR = "EuclidLabelError"
+    LABEL_WARNING = "EuclidLabelWarning"
+    LABEL_SUCCESS = "EuclidLabelSuccess"
+
+    DIALOG = "EuclidDialog"
+
+    MINIINDICATOR = "EuclidMiniIndicator"
+    MINIINDICATOR_RUN = "EuclidMiniIndicatorRun"
+    MINIINDICATOR_INVALID = "EuclidMiniIndicatorInvalid"
+
+    IMAGE = "EuclidImage"
+    IMAGE_NONBORDER = "EuclidImageNonBorder"
 
 class EucildUtils:
 
@@ -181,24 +208,45 @@ class _EuclidObject:
         self.setFixedSize(size)
         self.parent().something_resized(err)
 
-    def resizeEvent(self, evt):
-        # self.parent().somet
-        pass
-
-class _EuclidElasticObject(_EuclidObject):
+class _EuclidElasticObject:
     ''' if one widget can adjust size, you can provide a 
     size function to compute new size when parent size has changed'''
 
-    def init(self, resizefunc:callable, size=None):
-        super().init(is_fixed=False)
+    def init(self, resizefunc:callable, minsize=None):
+        self.setMinimumSize(*(EUCLID_MINSIZE if minsize is None else minsize))
         self.resizefunc = resizefunc
-        if size is None:
-            self.setMinimumSize(self.size())
+        self.connect(None)
+
+    def __moveto_lt(self, p, s):
+        self.move(p, p)
+
+    def __moveto_nexth(self, p, s):
+        self.move(*next_horizontal_pos(self.__last, s))
+
+    def __moveto_nextv(self, p, s):
+        self.move(*next_vertical_pos(self.__last, s))
+
+    def connect(self, other, h=False):
+        '''connect to another object'''
+
+        if other is None:
+            self.__last = None
+            self.__posfunc = self.__moveto_lt
+            return False
         else:
-            self.setMinimumSize(*size)
+            self.__last = other
+            self.__posfunc = self.__moveto_nexth if h else self.__moveto_nextv
+            return True
+
+    def repos(self, p, s):
+        self.__posfunc(p, s)
 
     def _resize(self, psize):
-        self.resize(self.resizefunc(psize))
+        psize = self.resizefunc(psize)
+        self.resize(
+            max(psize.width(), self.minimumWidth()),
+            max(psize.height(), self.minimumHeight())
+        )
 
 class _EuclidWidget(_EuclidObject, QWidget):
     def __init__(self, size=None, parent=None, **kwargs) -> None:
@@ -218,12 +266,12 @@ class _EuclidButton(_EuclidObject, QPushButton):
 class _EuclidElasticWidget(_EuclidElasticObject, QWidget):
     def __init__(self, resizefunc, size=None, parent=None, **kwargs) -> None:
         super().__init__(parent=parent)
-        self.init(resizefunc, size=size)
+        self.init(resizefunc, minsize=size)
 
 class _EuclidElasticLabel(_EuclidElasticObject, QLabel):
     def __init__(self, resizefunc, size=None, parent=None, **kwargs) -> None:
         super().__init__(parent=parent)
-        self.init(resizefunc, size=size)
+        self.init(resizefunc, minsize=size)
 
 class _EuclidScrollArea(_EuclidElasticObject, QScrollArea):
 
@@ -231,9 +279,10 @@ class _EuclidScrollArea(_EuclidElasticObject, QScrollArea):
         '''the size here means minimum size of current elastic object'''
 
         super().__init__(parent=parent, **kwargs)
-        self.init(resizefunc, size=size)
+        self.init(resizefunc, minsize=size)
+        self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
 
-class EuclidContainer(_EuclidElasticWidget):
+class EuclidContainer(QWidget):
     '''represent the layout of euclid, it would hold a group of widgets
     as a container, and itself would also be treated as a EuclidWidget, and it 
     can be add to another EuclidContainer '''
@@ -246,7 +295,7 @@ class EuclidContainer(_EuclidElasticWidget):
         @space: the space to last object
         @size: the fixed size or elastic size'''
 
-        super().__init__(None, size=(padding, padding), parent=parent, **kwargs)
+        super().__init__(parent=parent, **kwargs)
         self.setObjectName(EuclidNames.CONTAINER)
         self.__widgets = list()
         self.__padding = padding
@@ -258,11 +307,11 @@ class EuclidContainer(_EuclidElasticWidget):
 
     @property
     def eminheight(self):
-        return self.__minsize[1]
+        return self.__minsize.height()
 
     @property
     def eminwidth(self):
-        return self.__minsize[0]
+        return self.__minsize.width()
 
     def __add(self, w: _EuclidWidget, is_horizontal=False):
         '''add a new EuclidWidget to container, and new widget would as vertical object 
@@ -274,31 +323,31 @@ class EuclidContainer(_EuclidElasticWidget):
             if not w.connect(self.__last, True):
                 self.__head = w
         else:
+            if self.__last is None:
+                self.__minsize.setHeight(self.__padding + w.minimumHeight())
+            else:
+                self.__minsize.setHeight(self.__last.y() + self.__last.minimumHeight() + self.__space + w.minimumHeight())
             w.connect(self.__head, False)
             self.__head = w
         self.__last = w
         self.__last.repos(self.__padding, self.__space)
-        if (minw:=self.__last.x() + self.__last.minimumWidth()) > self.__minsize.width():
-            self.__minsize.setWidth(minw)
-        if (minh:=self.__last.y() + self.__last.minimumHeight()) > self.__minsize.height():
-            self.__minsize.setHeight(minh)
         self.setMinimumSize(self.__minsize)
 
-    def __addcontainer(self, ish, resizefunc=None, minsize=None, padding=5, has_border=True):
+    def __addcontainer(self, h, resizefunc=None, minsize=None, padding=5, has_border=True):
         if resizefunc is None:
             resizefunc = halfsize
         container = EuclidContainer(padding=padding, space=self.__space)
-        holder = _EuclidContainerHolder(container, resizefunc)
+        holder = _EuclidContainerHolder(container, resizefunc, has_border=has_border, size=minsize)
         if minsize is None:
             minsize = EUCLID_MINSIZE
         holder.setMinimumSize(*minsize)
-        self.__add(holder, ish)
+        self.__add(holder, h)
         return container
 
     def addcontainerh(self, resizefunc=None, minsize=None, padding=5, has_border=True):
         return self.__addcontainer(True, resizefunc, minsize, padding, has_border)
 
-    def addcontainerv(self, resizefunc=None, minsize=None, padding=5, has_border=True):
+    def addcontainer(self, resizefunc=None, minsize=None, padding=5, has_border=True):
         return self.__addcontainer(False, resizefunc, minsize, padding, has_border)
 
     def something_resized(self, err):
@@ -413,17 +462,18 @@ class _EuclidTitleBar(QLabel):
         self._lockbtn.move(self._closebtn.x() - self._closebtn_padding, self.padding)
 
 class _EuclidContainerHolder(_EuclidScrollArea):
+    '''一个容器必须由一个ScrollArea包裹'''
 
     def __init__(self, container, resizefunc, parent=None, has_border=True, **kwargs):
         super().__init__(resizefunc, parent=parent, **kwargs)
         self.setObjectName(EuclidNames.CONTAINER_HOLDER if has_border else EuclidNames.CONTAINER_HOLDER_NONBORDER)
         self.setWidget(container)
-        self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.setWidgetResizable(True)
         self._container = container
         self._container.move(0, 0)
 
     def resizeEvent(self, evt):
+        super().resizeEvent(evt)
         self._container.resize(self.height(), self.width())
 
 class EuclidWindow(_EuclidMoveable):
@@ -431,7 +481,7 @@ class EuclidWindow(_EuclidMoveable):
     window_list = list()
     top = None
 
-    def __init__(self, contentw=None, parent=None, has_title=True, padding=5, sizegrip_size=12, titlebar_height=20, title="Euclid Window", minsize=(100, 100), **kwargs):
+    def __init__(self, contentw=None, parent=None, has_title=True, padding=5, sizegrip_size=12, titlebar_height=20, title="Euclid Window", minsize=(100, 200), **kwargs):
         super().__init__(parent=parent, **kwargs)
         self.setObjectName(EuclidNames.WINDOW)
         self.setMinimumSize(*minsize)
@@ -501,6 +551,13 @@ class EuclidWindow(_EuclidMoveable):
         self.set_enabled(not value)
         self._locked = value
 
+    def mousePressEvent(self, event):
+        super().mousePressEvent(event)
+        if EuclidWindow.top != self:
+            self.raise_()
+            EuclidWindow.top.stackUnder(self)
+            EuclidWindow.top = self
+
     @property
     def is_locked(self):
         return self._locked
@@ -511,29 +568,184 @@ class EuclidWindow(_EuclidMoveable):
         self._container_holder.resize(self.width(), self.height() - self._container_holder_cut)
 
 
+
+
+
+
+
+# --------------------- 工具库 ------------------------
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 # --------------------- 控件库 ------------------------
 
-# class EuclidDebugTool(_EuclidLabel):
+class EuclidDocker(_EuclidWidget):
+    '''contains a unknown QWidget and make it could be layout 
+    as a euclidObject '''
 
-#     def __init__(self, size=None, minsize=(100, 100), parent=None):
-#         super().__init__(size=size, minsize=minsize, parent=parent)
-#         self.setStyleSheet("background:#79be91;")
+    def __init__(self, w=None, size=None):
+        super().__init__(size=size)
+        self.w = w
+        w.setParent(self)
 
-#     def resizeEvent(self, a0):
-#         self.setText(f"({self.width()}, {self.height()})")
+    def set_widget(self, w):
+        if self.w != None:
+            self.w.setParent(None)
+        self.w = w
+        self.w.setParent(self)
+
+class EuclidElasticDocker(_EuclidElasticWidget):
+    '''can resize self'''
+
+    def __init__(self, resizefunc, w=None, size=None):
+        super().__init__(resizefunc, size=size)
+        self.w = w
+        w.setParent(self)
+
+    def set_widget(self, w):
+        if self.w != None:
+            self.w.setParent(None)
+        self.w = w
+        self.w.setParent(self)
+
+    def resizeEvent(self, evt):
+        if self.w != None:
+            self.w.resize(self.size())
+
+class EuclidLabel(_EuclidLabel):
+
+    def __init__(self, size=(80, 14), text="ulabel"):
+        super().__init__(size=size)
+        self.setObjectName(EuclidNames.LABEL)
+        self.setText(text)
+
+    def error(self, text:str):
+        self.setText(text)
+        restyle(self, EuclidNames.LABEL_ERROR)
+
+    def warning(self, text:str):
+        self.setText(text)
+        restyle(self, EuclidNames.LABEL_WARNING)
+
+    def success(self, text:str):
+        self.setText(text)
+        restyle(self, EuclidNames.LABEL_SUCCESS)
+
+    def normal(self, text:str):
+        self.setText(text)
+        restyle(self, EuclidNames.LABEL)
+
+class EuclidMiniIndicator(_EuclidLabel):
+
+    def __init__(self):
+        super().__init__(size=(12, 12))
+        self.setObjectName(EuclidNames.MINIINDICATOR)
+
+    def normal(self):
+        restyle(self, EuclidNames.MINIINDICATOR)
+
+    def invalid(self):
+        restyle(self, EuclidNames.MINIINDICATOR_INVALID)
+
+    def run(self):
+        restyle(self, EuclidNames.MINIINDICATOR_RUN)
+
+class EuclidElasticLabel(_EuclidElasticLabel):
+
+    def __init__(self, resizefunc, size=None, text="ulabel", center=False):
+        super().__init__(resizefunc, size=size)
+        self.setObjectName(EuclidNames.LABEL)
+        self.setText(text)
+        if center:
+            self.setAlignment(Qt.AlignCenter)
+
+    def error(self, text:str):
+        self.setText(text)
+        restyle(self, EuclidNames.LABEL_ERROR)
+
+    def warning(self, text:str):
+        self.setText(text)
+        restyle(self, EuclidNames.LABEL_WARNING)
+
+    def success(self, text:str):
+        self.setText(text)
+        restyle(self, EuclidNames.LABEL_SUCCESS)
+
+    def normal(self, text:str):
+        self.setText(text)
+        restyle(self, EuclidNames.LABEL)
 
 class EuclidButton(_EuclidButton):
     ''' universal button'''
 
-    def __init__(self, size=None, title="ubutton", callback=None):
+    def __init__(self, size=(80, 20), title="ubutton", callback=None):
         super().__init__(size=size)
-        self.setText(title)
         self.setObjectName(EuclidNames.BUTTON)
+        self.setText(title)
         if callback != None:
             self.clicked.connect(callback)
 
     def set_callback(self, callback:callable):
         self.clicked.connect(callback)
 
+class EuclidDialogBase(QDialog):
+
+    def __init__(self, parent=None):
+        super().__init__(parent=parent)
+        self.setWindowFlags(Qt.FramelessWindowHint)
+        self.setAttribute(Qt.WA_TranslucentBackground, True)
+
+        # label content
+        self.content = QLabel(self)
+        self.content.setObjectName(EuclidNames.DIALOG)
+        self.move(QDesktopWidget().availableGeometry().center() - QPoint(self.width() // 2, self.height() // 2))
+
+    def resizeEvent(self, a0):
+        self.content.resize(self.width(), self.height())
+
+class EuclidMessageBox(EuclidDialogBase):
+
+    def __init__(self, parent=None):
+        super().__init__(parent=parent)
+        self.resize(230, 80)
+        self._label = EuclidLabel()
+        self._label.setParent(self.content)
+        self._label.setAlignment(Qt.AlignCenter)
+        self._label.move(0, 10)
+        self._label.resize(self.width(), self._label.height())
+
+        self._button = EuclidButton(title="确认", callback=self.accept)
+        self._button.setParent(self.content)
+        self._button.move(75, 34)
+
+    def showMessage(self, content):
+        ''' popup a message which need user to confirm '''
+
+        self._label.setText(content)
+        self._label.resize(self._label.sizeHint())
+        self.exec()
+
+class EuclidImage(_EuclidElasticLabel):
+    ''' show image on window '''
+
+    def __init__(self, resizefunc, size=(100, 100), pixmap=None, has_border=False):
+        super().__init__(resizefunc, size=size)
+        self.setObjectName(EuclidNames.IMAGE if has_border else EuclidNames.IMAGE_NONBORDER)
+        self.setAlignment(Qt.AlignCenter)
+        if pixmap != None:
+            self.setPixmap(pixmap)
+        
+
 if __name__ == '__main__':
-    print(generate_md5("hello world"))
+    pass
