@@ -5,13 +5,287 @@
 #        the layout of euclid window just like imgui but it based on PyQt5 
 #        so it's not dynamic but static 
 
+# ------------------------------------  Euclid Default Style -------------------------------------------
+
+EUCLID_DEFAULT_STYLE = '''
+#EuclidBaseWindow{
+    /* background-color:#43434f; */
+    border-image:url(./res/test.png);
+}
+#EuclidWindow{
+    background-color:rgba(39, 39, 54, 242);
+    border-radius:5px;
+    border:1px solid grey;
+}
+#EuclidWindowAlpha{
+    background-color:rgba(39, 39, 54, 100);
+    border-radius:5px;
+    border:1px solid grey;
+}
+#EuclidContainer{
+    background:#4d4d7e;
+}
+#EuclidContainerHolder{
+    border:1px solid grey;
+    border-radius:5px;
+}
+#EuclidContainerHolderNonBorder{
+
+}
+#EuclidSizeGrip{
+    background-color:#dbd4d4;
+    border-radius:6px;
+}
+#EuclidSizeGrip:hover{
+    background-color:#ffffeb;
+}
+#EuclidTitleBar{
+    background-color:#465374;
+    border-top-left-radius:5px;
+    border-top-right-radius:5px;
+    border-right: 1px solid grey;
+    border-left: 1px solid grey;
+    border-top: 1px solid grey;
+}
+#EuclidTitleContent{
+    color:#ffffeb;
+}
+#EuclidCloseButton{
+    border-radius:6px;
+    background-color:#74adbb;
+}
+#EuclidCloseButton:hover{
+    background-color:#acd2db;
+}
+#EuclidCloseButton:pressed{
+    background-color:#c9e5ec;
+}
+#EuclidLockButtonNormal{
+    border-radius:6px;
+    background-color:#79be91;
+}
+#EuclidLockButtonNormal:hover{
+    background-color:#a8d8b8;
+}
+#EuclidLockButtonNormal:pressed{
+    background-color:#cff0da;
+}
+#EuclidLockButtonLocked{
+    border-radius:6px;
+    background-color:#898989;
+}
+#EuclidLockButtonLocked:hover{
+    background-color:#a9a9a9;
+}
+#EuclidLockButtonLocked:pressed{
+    background-color:#cdcdcd;
+}
+QScrollArea{
+    background:rgba(0, 0, 0, 0);
+    border:none;
+}
+QScrollBar:vertical{
+    border:none;
+    width:10px;
+    border-radius:0px;
+    margin:0px 0px 0px 0px;
+    background-color:rgba(0,0,0,0);
+}
+QScrollBar::handle:vertical{
+    background-color:#5e5e6c;
+    border-radius:5px;
+}
+QScrollBar::handle:vertical:hover{
+    background-color:#43434f;
+}
+QScrollBar::handle:vertical:pressed{
+    background-color:#5e5e6c;
+}
+QScrollBar::sub-line:vertical{
+    border:none;
+    height:0px;
+    subcontrol-position:top;
+    subcontrol-origin:margin;
+}
+QScrollBar::add-line:vertical{
+    border:none;
+    height:0px;
+    subcontrol-position:bottom;
+    subcontrol-origin:margin;
+}
+
+QScrollBar::up-arrow:vertical, QScrollBar::down-arrow:vertical{
+    background:none;
+}
+QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical{
+    background:none;
+}
+
+
+
+/* Euclid Base Widgets */
+
+/* button */
+#EuclidButton{
+    border-radius:2px;
+    background-color:#546799;
+    color:#ffffeb;
+}
+#EuclidButton:hover{
+    background-color:#5a80a7;
+}
+#EuclidButton:pressed{
+    background-color:#464a73;
+}
+#EuclidButtonDisable{
+    border:none;
+    border-radius:2px;
+    background-color:grey;
+    color:#ffffeb;
+}
+
+#EuclidButtonRed{
+    border-radius:2px;
+    background-color:#9f3847;
+    color:#ffffeb;
+}
+#EuclidButtonRed:hover{
+    background-color:#c74446;
+}
+#EuclidButtonRed:pressed{
+    background-color:#6e2731;
+}
+
+/* label */
+#EuclidLabel{
+    border-radius:2px;
+    color:#ffffeb;
+}
+#EuclidLabelError{
+    border-radius:2px;
+    color:#e22333;
+}
+#EuclidLabelWarning{
+    border-radius:2px;
+    color:#fcf660;
+}
+#EuclidLabelSuccess{
+    border-radius:2px;
+    color:rgb(0, 255, 0);
+}
+
+
+
+/* dialog */
+#EuclidDialog{
+    background-color:rgba(39,39,54,242);
+    border-radius:2px;
+    border:1px solid grey;
+}
+
+/* image */
+#EuclidImage{
+    background-color:rgba(0,0,0,0);
+    border-radius:5px;
+    border:1px solid grey;
+}
+#EuclidImageNonBorder{
+    background-color:rgba(0,0,0,0);
+    border:none;
+}
+
+/* mini indicator */
+#EuclidMiniIndicator{
+    background-color:#b2d942;
+    border-radius:6px;
+}
+#EuclidMiniIndicatorRun{
+    background-color:red;
+    border-radius:6px;
+}
+#EuclidMiniIndicatorInvalid{
+    background-color:grey;
+    border-radius:6px;
+}
+
+/* mini button */
+#EuclidMiniButton{
+    border-radius:6px;
+    background-color:#546799;
+}
+#EuclidMiniButton:hover{
+    background-color:#5a80a7;
+}
+#EuclidMiniButton:pressed{
+    background-color:#464a73;
+}
+
+#EuclidMiniButtonRed{
+    border-radius:6px;
+    background-color:#c74446;
+}
+#EuclidMiniButtonRed:hover{
+    background-color:#e84f51;
+}
+#EuclidMiniButtonRed:pressed{
+    background-color:#9f3847;
+}
+
+QComboBox{
+   background: rgba(39, 39, 54, 100);
+   border:1px solid grey;
+   border-radius: 2px;
+   color: #ffffeb;
+}
+
+QComboBox::drop-down {
+   subcontrol-position: center right;
+   border-radius:2px;
+   border:none;
+}
+/*QComboBox QAbstractItemView::item {
+   padding: 10px 10px 10px 10px;
+   background:rgba(39, 39, 54, 100);
+}*/
+QComboBox QAbstractItemView {
+   color: #ffffeb;
+   selection-background-color:rgba(39, 39, 54, 100);
+   selection-color:#b9f216;
+   background: #43434f;
+   outline:none;
+   border-radius:2px;
+}
+/*QComboBox QListView::item{
+   background: rgba(39, 39, 54, 100);
+   min-height:20px;
+}*/
+'''
+
+
+
 from PyQt5.QtWidgets import *
 from PyQt5.QtCore import *
 import hashlib
 import json
 import os
 
-EUCLID_MINSIZE = (100, 100)
+from matplotlib.pyplot import gray
+
+EUCLID_MINSIZE = (20, 20)
+
+class EuclidGeometry:
+
+    @staticmethod
+    def fullsizeGap(gapsize:tuple) -> callable:
+        return lambda x:QSize(x.width() - gapsize[0], x.height() - gapsize[1])
+
+    @staticmethod
+    def fullsizeGapX(gapx:int) -> callable:
+        return lambda x:QSize(x.width() - gapx, x.height())
+
+    @staticmethod
+    def fullsizeGapY(gapy:int) -> callable:
+        return lambda x:QSize(x.width(), x.height() - gapy)
 
 def fullsize(size):
     return size
@@ -80,7 +354,7 @@ def store_window_status(baseWindow, windows:list, filepath:str):
         "size":[baseWindow.width(), baseWindow.height()],
         "pos":[baseWindow.x(), baseWindow.y()]
     })
-    o.setdefault("top", EuclidWindow.top.window_id)
+    o.setdefault("top", EuclidWindow.connectionTop.window_id)
     o.setdefault("window_list", window_list)
     with open(filepath, "w", encoding='utf-8') as f:
         json.dump(o, f)
@@ -100,9 +374,10 @@ def restore_window_status(baseWindow, filepath:str):
                 win.resize(*kv[1]["size"])
                 win.set_lock(kv[1]["locked"])
 
-            window = o["base_window"]
-            baseWindow.resize(*window["size"])
-            baseWindow.move(*window["pos"])
+            if baseWindow != None:
+                window = o["base_window"]
+                baseWindow.resize(*window["size"])
+                baseWindow.move(*window["pos"])
         except Exception as e:
             print(e)
 
@@ -131,6 +406,8 @@ class EuclidNames:
     # euclid widgets
     BUTTON = "EuclidButton"
     BUTTON_RED = "EuclidButtonRed"
+    BUTTON_DISABLE = "EuclidButtonDisable"
+
     LABEL = "EuclidLabel"
     LABEL_ERROR = "EuclidLabelError"
     LABEL_WARNING = "EuclidLabelWarning"
@@ -144,6 +421,8 @@ class EuclidNames:
 
     IMAGE = "EuclidImage"
     IMAGE_NONBORDER = "EuclidImageNonBorder"
+
+    COMBOBOX = "EuclidComboBox"
 
 class EucildUtils:
 
@@ -331,7 +610,7 @@ class EuclidContainer(QWidget):
             self.__head = w
         self.__last = w
         self.__last.repos(self.__padding, self.__space)
-        self.setMinimumSize(self.__minsize)
+        self.setMinimumHeight(self.__minsize.height())
 
     def __addcontainer(self, h, resizefunc=None, minsize=None, padding=5, has_border=True):
         if resizefunc is None:
@@ -380,15 +659,17 @@ class _EuclidMoveable(QLabel):
         self._valid = value
 
     def mousePressEvent(self, ev):
-        self._can_move = True
-        self._pos = ev.pos()
+        if ev.button() == Qt.LeftButton:
+            self._can_move = True
+            self._pos = ev.pos()
 
     def mouseMoveEvent(self, ev):
         if self._can_move and self._valid:
             move_window(self, ev, self._pos)
 
     def mouseReleaseEvent(self, ev):
-        self._can_move = False
+        if ev.button() == Qt.LeftButton:
+            self._can_move = False
 
 class _EuclidSizeGrip(_EuclidMoveable):
 
@@ -462,7 +743,7 @@ class _EuclidTitleBar(QLabel):
         self._lockbtn.move(self._closebtn.x() - self._closebtn_padding, self.padding)
 
 class _EuclidContainerHolder(_EuclidScrollArea):
-    '''一个容器必须由一个ScrollArea包裹'''
+    ''' an euclid container must be place in a _EuclidContainerHolder'''
 
     def __init__(self, container, resizefunc, parent=None, has_border=True, **kwargs):
         super().__init__(resizefunc, parent=parent, **kwargs)
@@ -479,12 +760,44 @@ class _EuclidContainerHolder(_EuclidScrollArea):
 class EuclidWindow(_EuclidMoveable):
     
     window_list = list()
-    top = None
+    topList = list()
+    connectionTop = None
 
-    def __init__(self, contentw=None, parent=None, has_title=True, padding=5, sizegrip_size=12, titlebar_height=20, title="Euclid Window", minsize=(100, 200), **kwargs):
+    def loadNewWindow(window):
+        ''' when create a new window, raise_ target window and
+        record to connectionTop'''
+
+        window.window_id = len(EuclidWindow.window_list)
+        EuclidWindow.raiseWindow(window)
+
+    def setOnTop(window):
+        '''make window always on top'''
+
+        if window not in EuclidWindow.topList:
+            window.raise_()
+            EuclidWindow.topList.append(window)
+
+    def cancelOnTop(window):
+        '''cancel window always on top'''
+
+        if window in EuclidWindow.topList:
+            EuclidWindow.topList.remove(window)
+
+    def raiseWindow(window):
+        '''raise window as top when window has got focusIn event'''
+
+        if window not in EuclidWindow.topList and window != EuclidWindow.connectionTop:
+            window.raise_()
+            if len(EuclidWindow.topList) > 0:
+                window.stackUnder(EuclidWindow.topList[0])
+            EuclidWindow.connectionTop = window
+
+    def __init__(self, contentw=None, parent=None, has_title=True, padding=5, sizegrip_size=12, titlebar_height=20, title="Euclid Window", minsize=(50, 50), **kwargs):
         super().__init__(parent=parent, **kwargs)
         self.setObjectName(EuclidNames.WINDOW)
+        self.setFocusPolicy(Qt.StrongFocus)
         self.setMinimumSize(*minsize)
+        self.setFrameStyle(QFrame.NoFrame)
 
         # base attributes
         self.padding = padding
@@ -506,17 +819,51 @@ class EuclidWindow(_EuclidMoveable):
         if contentw is None:
             contentw = EuclidContainer(padding=5)
         self._container = contentw
-        self._container_holder = _EuclidContainerHolder(self._container, lambda x: x, self, has_border=False)
+        self._container_holder = _EuclidContainerHolder(self._container, fullsize, self, has_border=False)
         self._container_holder.move(0, _titlebar_height)
-        self._container_holder_cut = sizegrip_size + padding + _titlebar_height
+        self._container_holder_cut = self._sizegrip_offset + _titlebar_height
+        contentw.setFocusPolicy(Qt.StrongFocus)
+        contentw.installEventFilter(self)
+        self.installEventFilter(self)
+
+        self._sizegrip.raise_()
 
         # window id
         self.window_id = len(EuclidWindow.window_list)
         EuclidWindow.window_list.append(self)
+        EuclidWindow.raiseWindow(self)
 
-        if EuclidWindow.top is None:
-            self.raise_()
-            EuclidWindow.top = self
+    def hideSizeGrip(self):
+        self._sizegrip.hide()
+        self._container_holder_cut -= self._sizegrip_offset
+
+    def eventFilter(self, obj: QObject, event: QEvent) -> bool:
+        if event.type() == QEvent.FocusIn:
+            EuclidWindow.raiseWindow(self)
+            return True
+        elif event.type() == QEvent.FocusOut:
+            return True
+        return super().eventFilter(obj, event)
+
+    def add(self, w: _EuclidObject):
+        w.setFocusPolicy(Qt.StrongFocus)
+        w.installEventFilter(self)
+        self._container.add(w)
+
+    def addh(self, w: _EuclidObject):
+        w.setFocusPolicy(Qt.StrongFocus)
+        w.installEventFilter(self)
+        self._container.addh(w)
+
+    def addh_container(self, resizefunc, minsize=None, padding=0, has_border=True):
+        c = self._container.addcontainerh(resizefunc, minsize=minsize, padding=padding, has_border=has_border)
+        c.installEventFilter(self)
+        return c
+
+    def add_container(self, resizefunc, minsize=None, padding=0, has_border=True):
+        c = self._container.addcontainer(resizefunc, minsize=minsize, padding=padding, has_border=has_border)
+        c.installEventFilter(self)
+        return c
 
     def enable_title(self, value=True):
         '''show or hide title according to value '''
@@ -551,13 +898,6 @@ class EuclidWindow(_EuclidMoveable):
         self.set_enabled(not value)
         self._locked = value
 
-    def mousePressEvent(self, event):
-        super().mousePressEvent(event)
-        if EuclidWindow.top != self:
-            self.raise_()
-            EuclidWindow.top.stackUnder(self)
-            EuclidWindow.top = self
-
     @property
     def is_locked(self):
         return self._locked
@@ -566,20 +906,6 @@ class EuclidWindow(_EuclidMoveable):
         self._sizegrip.move(self.width() - self._sizegrip_offset, self.height() - self._sizegrip_offset)
         if self.has_title:self._titlebar.resize(self.width(), self._titlebar.height())
         self._container_holder.resize(self.width(), self.height() - self._container_holder_cut)
-
-
-
-
-
-
-
-# --------------------- 工具库 ------------------------
-
-
-
-
-
-
 
 
 
@@ -625,10 +951,12 @@ class EuclidElasticDocker(_EuclidElasticWidget):
 
 class EuclidLabel(_EuclidLabel):
 
-    def __init__(self, size=(80, 14), text="ulabel"):
+    def __init__(self, size=(80, 14), text="ulabel", center=False):
         super().__init__(size=size)
         self.setObjectName(EuclidNames.LABEL)
         self.setText(text)
+        if center:
+            self.setAlignment(Qt.AlignCenter)
 
     def error(self, text:str):
         self.setText(text)
@@ -693,11 +1021,37 @@ class EuclidButton(_EuclidButton):
         super().__init__(size=size)
         self.setObjectName(EuclidNames.BUTTON)
         self.setText(title)
+        self.useful = True
         if callback != None:
             self.clicked.connect(callback)
 
     def set_callback(self, callback:callable):
         self.clicked.connect(callback)
+
+    def invalid(self):
+        self.setEnabled(False)
+        restyle(self, EuclidNames.BUTTON_DISABLE)
+
+    def resume(self):
+        self.setEnabled(True)
+        restyle(self, EuclidNames.BUTTON)
+
+class EuclidComboBox(_EuclidElasticObject, QComboBox):
+
+    def __init__(self, resizefunc, size=(80, 20)):
+        super().__init__()
+        self.setObjectName(EuclidNames.COMBOBOX)
+        self.init(resizefunc, size)
+
+    
+
+class EuclidMiniButton(_EuclidMiniButton):
+
+    def __init__(self, callback=None):
+        super().__init__(None)
+        self.setObjectName(EuclidNames.MINIBUTTON)
+        if callback != None:
+            self.clicked.connect(callback)
 
 class EuclidDialogBase(QDialog):
 

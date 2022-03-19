@@ -4,11 +4,12 @@ QGraphicsView{
     border:1px solid grey;
 }
 QLineEdit{
-    background-color:rgba(0, 0, 0, 255);
+    background-color:rgba(0, 0, 0, 0);
     border-radius: 2px;
     border:1px solid grey;
     selection-background-color: rgba(0, 0, 0, 255);
     color:#ffffeb;
+    min-height:20px;
 }
 @font-face{
     font-family:zpix;
@@ -37,7 +38,7 @@ QLineEdit{
     border:none;
 }
 #EditorBrushContainerList::item:selected:active{
-    background: rgba(120, 120, 120, 100);
+    background: rgba(113, 113, 113, 100);
     border:none;
 }
 #EditorBrushContainerList::item:selected:!active{
