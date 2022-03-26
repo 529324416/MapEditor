@@ -52,33 +52,43 @@ EUCLID_DEFAULT_STYLE = '''
 }
 #EuclidCloseButton{
     border-radius:6px;
-    background-color:#74adbb;
+    background-color:#d41e3c;
 }
 #EuclidCloseButton:hover{
-    background-color:#acd2db;
+    background-color:#ffffeb;
 }
 #EuclidCloseButton:pressed{
-    background-color:#c9e5ec;
+    background-color:#9b0e3e;
 }
 #EuclidLockButtonNormal{
     border-radius:6px;
-    background-color:#79be91;
+    background-color:#66ffe3;
 }
 #EuclidLockButtonNormal:hover{
-    background-color:#a8d8b8;
+    background-color:#ffffeb;
 }
 #EuclidLockButtonNormal:pressed{
-    background-color:#cff0da;
+    background-color:#4da6ff;
 }
 #EuclidLockButtonLocked{
     border-radius:6px;
-    background-color:#898989;
+    background-color:#c2c2d1;
 }
 #EuclidLockButtonLocked:hover{
-    background-color:#a9a9a9;
+    background-color:#ffffeb;
 }
 #EuclidLockButtonLocked:pressed{
-    background-color:#cdcdcd;
+    background-color:#7e7e8f;
+}
+#EuclidTopButtonNormal{
+    border-radius:6px;
+    background-color:#fffb78;
+}
+#EuclidTopButtonNormal:hover{
+    background-color:#ffffeb;
+}
+#EuclidTopButtonNormal:pressed{
+    background-color:#f2a65e;
 }
 QScrollArea{
     background:rgba(0, 0, 0, 0);
@@ -347,7 +357,8 @@ def store_window_status(baseWindow, windows:list, filepath:str):
         cnt = {
             "pos":[window.x(), window.y()],
             "size":[window.width(), window.height()],
-            "locked":window.is_locked
+            "locked":window.is_locked,
+            "hidden":window.isHidden()
         }
         window_list.setdefault(window.window_id, cnt)
     o.setdefault("base_window", {
@@ -373,7 +384,8 @@ def restore_window_status(baseWindow, filepath:str):
                 win.move(*kv[1]["pos"])
                 win.resize(*kv[1]["size"])
                 win.set_lock(kv[1]["locked"])
-
+                if kv[1]["hidden"]:
+                    win.hide()
             if baseWindow != None:
                 window = o["base_window"]
                 baseWindow.resize(*window["size"])
@@ -401,6 +413,7 @@ class EuclidNames:
     TITLEBAR_CLOSEBTN = "EuclidCloseButton"
     TITLEBAR_LOCKBTN_NORMAL = "EuclidLockButtonNormal"
     TITLEBAR_LOCKBTN_LOCKED = "EuclidLockButtonLocked"
+    TITLEBAR_TOPBTN_NORMAL = "EuclidTopButtonNormal"
     SIZEGRIP = "EuclidSizeGrip"
 
     # euclid widgets
@@ -696,7 +709,7 @@ class _EuclidMiniButton(QPushButton):
 class _EuclidTitleBar(QLabel):
     '''Euclid Titlt Bar '''
 
-    def __init__(self, height, parent, lockfunc, title="Euclid Window", padding=5, btnsize=12, **kwargs):
+    def __init__(self, height, parent, lockfunc, topfunc, title="Euclid Window", padding=5, btnsize=12, **kwargs):
         super().__init__(parent=parent, **kwargs)
         self.setObjectName(EuclidNames.TITLEBAR)
         self.setFixedHeight(height)
@@ -716,6 +729,19 @@ class _EuclidTitleBar(QLabel):
         self._lockbtn.setObjectName(EuclidNames.TITLEBAR_LOCKBTN_NORMAL)
         self._lockbtn.clicked.connect(self._lock)
         self._lock_window = lockfunc
+
+        self._topbtn = _EuclidMiniButton(self, size=(btnsize, btnsize))
+        self._topbtn.setObjectName(EuclidNames.TITLEBAR_LOCKBTN_LOCKED)
+        self._topbtn.clicked.connect(self._top)
+        self._top_window = topfunc
+
+    def _top(self):
+        '''set window on top'''
+
+        if self._top_window():
+            restyle(self._topbtn, EuclidNames.TITLEBAR_TOPBTN_NORMAL)
+        else:
+            restyle(self._topbtn, EuclidNames.TITLEBAR_LOCKBTN_LOCKED)
 
     def _lock(self):
         '''lock window and reset style'''
@@ -741,6 +767,7 @@ class _EuclidTitleBar(QLabel):
         
         self._closebtn.move(self.width() - self._closebtn_padding, self.padding)
         self._lockbtn.move(self._closebtn.x() - self._closebtn_padding, self.padding)
+        self._topbtn.move(self._lockbtn.x() - self._closebtn_padding, self.padding)
 
 class _EuclidContainerHolder(_EuclidScrollArea):
     ''' an euclid container must be place in a _EuclidContainerHolder'''
@@ -782,6 +809,8 @@ class EuclidWindow(_EuclidMoveable):
 
         if window in EuclidWindow.topList:
             EuclidWindow.topList.remove(window)
+        if len(EuclidWindow.topList) > 0:
+            window.stackUnder(EuclidWindow.topList[0])
 
     def raiseWindow(window):
         '''raise window as top when window has got focusIn event'''
@@ -806,7 +835,7 @@ class EuclidWindow(_EuclidMoveable):
         self.has_title = has_title
         _titlebar_height = titlebar_height if has_title else 0
         self._titlebar_height = titlebar_height
-        self._titlebar = _EuclidTitleBar(titlebar_height, self, self._lock, title=title)
+        self._titlebar = _EuclidTitleBar(titlebar_height, self, self._lock, self._top, title=title)
         if not has_title:
             self._titlebar.hide()
 
@@ -814,6 +843,7 @@ class EuclidWindow(_EuclidMoveable):
         self._sizegrip = _EuclidSizeGrip((sizegrip_size, sizegrip_size), self)
         self._sizegrip_offset = padding + sizegrip_size
         self._locked = False
+        self._ontop = False
 
         # about container
         if contentw is None:
@@ -878,6 +908,17 @@ class EuclidWindow(_EuclidMoveable):
             if not self._titlebar.isHidden():
                 self._titlebar.hide()
                 self._titlebar.setFixedHeight(0)
+
+    def _top(self):
+        '''set top or unset top '''
+
+        self._ontop = not self._ontop
+        if self._ontop:
+            EuclidWindow.setOnTop(self)
+            return True
+        else:
+            EuclidWindow.cancelOnTop(self)
+            return False
 
     def _lock(self):
         '''lock or unlock window, if window locked, 

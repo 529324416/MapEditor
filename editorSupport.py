@@ -54,7 +54,6 @@ class SimpleEditor(QLineEdit):
         self.focb()
         return super().focusOutEvent(event)
 
-
 class ItemProxy(QWidget):
 
     def __init__(self, Id, textChanged, deleteCallback, visibleCallback, chooseCallback, padding=5):
@@ -132,7 +131,6 @@ class ItemProxy(QWidget):
     def mouseDoubleClickEvent(self, event) -> None:
         self.enterEdit()
 
-
 class SimpleListWidget(QListWidget):
 
     def __init__(self, dataCallback, deleteCallback, visibleCallback, chooseCallback, parent=None):
@@ -153,7 +151,6 @@ class SimpleListWidget(QListWidget):
         self.setItemWidget(item, proxy)
         return proxy
 
-
 class ItemProxySingleBtn(QWidget):
     '''类似于ItemProxy, 但仅有一个删除按钮'''
 
@@ -166,7 +163,7 @@ class ItemProxySingleBtn(QWidget):
 
         self.button = QPushButton()
         self.button.setObjectName("red")
-        self.button.clicked.connect(lambda:onDeleted(Id))
+        self.button.clicked.connect(lambda:onDeleted(self.Id))
         self.button.setFixedSize(12, 12)
         self._layout.addWidget(self.button)
 
@@ -211,8 +208,10 @@ class ItemProxySingleBtn(QWidget):
         if len(text) > 0:
             if self.Id != text:
                 if self.onTextChanged(self.Id, text):
+                    print(self.Id)
                     self.label.setText(text)
                     self.Id = text
+                    print(self.Id)
         self.quitEdit()
 
     def quitEdit(self):
@@ -274,7 +273,6 @@ class InputBox(QWidget):
     def editText(self):
         return self.editor.text()
 
-
 def makeButtons(buttonList:list):
 
     layout = QHBoxLayout()
@@ -283,7 +281,6 @@ def makeButtons(buttonList:list):
         button.clicked.connect(args[1])
         layout.addWidget(button)
     return layout
-
 
 class RoomCreatorHelper(EuclidWindow):
     '''该窗体用以辅助创建一个新的房间'''
@@ -375,7 +372,6 @@ class RoomCreatorHelper(EuclidWindow):
     def adjustArgs(self):
         return self.cpos, self.csize, self.lb, self.rt
 
-
 class RoomCreator(QDialog):
 
     def __init__(self, callback, parent=None):
@@ -440,6 +436,7 @@ class RoomCreator(QDialog):
         super().resizeEvent(event)
         self.content.resize(self.width(), self.height())
 
+
 class ProjectCreator(QDialog):
 
     def __init__(self, callback, parent=None, title="创建新工程", content="输入工程名"):
@@ -458,8 +455,8 @@ class ProjectCreator(QDialog):
     def confirm(self):
         text = self.nameInput.editText().strip()
         if len(text) > 0:
-            self.callback(text)
-            self.accept()
+            if self.callback(text):
+                self.accept()
         else:
             QMessageBox.information(None, "错误报告", "输入的名称无效", QMessageBox.Ok)
 

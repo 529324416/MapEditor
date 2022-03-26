@@ -1,7 +1,8 @@
 # pyqt5
-from tokenize import Pointfloat
-from typing import overload
-import typing
+
+from curses import raw
+from pdb import post_mortem
+from stat import filemode
 from PyQt5.QtWidgets import *
 from PyQt5.QtGui import *
 from PyQt5.QtCore import *
@@ -15,18 +16,33 @@ from editorSupport import *
 import os
 import sys
 import math
-import queue
 import time
+import queue
+import shutil
+import zipfile
+import collections
 
 # other
 import numpy as np
 
-
+EDITOR_VERSION = "0.90_AlphaTest"
 
 def now():
 
     t = time.localtime()
     return f"{t[3]}:{t[4]}:{t[5]}"
+
+def removeFolder(folder:str, clear=True):
+    '''删除文件夹下所有的文件'''
+
+    for file in os.listdir(folder):
+        path = f"{folder}/{file}"
+        if os.path.isfile(path):
+            os.remove(path)
+        else:
+            removeFolder(path, True)
+    if clear:
+        os.rmdir(folder)
 
 class MsgType:
 
@@ -194,9 +210,6 @@ QSS_INDICATOR = '''
 '''
 
 
-
-
-
 # ---------------- 编辑器数据组件 -------------------
 # 定义所有该编辑器中需要用的数据对象
 
@@ -281,96 +294,124 @@ class Tile:
 class TileLut:
     '''瓦片查找表, 也负责导入瓦片, 提供瓦片的数字ID和文本ID的转换渠道'''
 
-    def __init__(self, ID = 1, recycleList=[]):
+    def __init__(self):
 
-        self.__ID2TILE = dict()
-        self.__NAME2TILE = dict()
-        self.ID = ID
-        self.recycleList = queue.Queue()
-        for value in recycleList:
-            self.recycleList.put(value)
+        self.IdToTile = {}
+        self.nameToTile = {}
+        self.IdToPixmap = {}
 
-        self.createBuffer = list()              # 用于存储上一次加载的所有瓦片
+    def loadFromLut(self, lut:dict, folder="./tmp"):
+        '''加载瓦片查找表数据'''
 
-    def hasTile(self, tileId:int) -> bool:
-        return tileId in self.__ID2TILE
+        try:
+            nameToId = lut["nameToId"]
+            self.IdToTile = {}
+            self.nameToTile = {}
+            self.IdToPixmap = {}                # 优化搜索pixmap的速度
 
-    def toJson(self):
-        '''convert value to json '''
-
-        recycleList = []
-        while self.recycleList.not_empty:
-            recycleList.append(self.recycleList.get())
-
-        return {
-            "currentId":self.ID,
-            "recycleList":recycleList
-        }
-
-    def loadJson(self, o):
-        '''从json数据中还原当前的所有数据 '''
-
-    def nextTileId(self):
-        '''生成下一个瓦片ID'''
-
-        if self.recycleList.qsize() > 0:
-            return self.recycleList.get()
-        output = self.ID
-        self.ID += 1
-        return output
-
-    def __checkFile(self, filepath):
-        '''检查目标文件是否有效'''
-
-        # 检查文件路径是否有效
-        if os.path.exists(filepath) and os.path.isfile(filepath):
-            
-            # 检查是否有同名的文件
-            if self._nameFromPath(filepath) not in self.__NAME2TILE:
-                return True
-        return False
-            
-    def __createTile(self, filepath):
-        '''创建一块新的瓦片'''
-
-        if self.__checkFile(filepath):
-            tile = Tile(self._nameFromPath(filepath), self.nextTileId(), filepath)
-            self.__ID2TILE.setdefault(tile.tileId, tile)
-            self.__NAME2TILE.setdefault(tile.name, tile)
-            self.createBuffer.append(tile)
+            for name in lut["filenames"]:
+                Id = nameToId[name]
+                tile = Tile(name, Id, f"{folder}/pictures/{name}.png")
+                self.nameToTile.setdefault(name, tile)
+                self.IdToTile.setdefault(Id, tile)
+                self.IdToPixmap.setdefault(Id, tile.pixmap)
             return True
-        return False
+        except Exception as e:
+            return False
 
-    def takeBrushFromBuffer(self, brushHandler):
-        '''将createBuffer里的所有Tile转换为Brush'''
+    def generateBrushes(self) -> list:
+        '''生成所有的瓦片笔刷'''
 
-        return [brushHandler.brushFromRawTile(tile) for tile in self.createBuffer]
-
-    def load(self, files:list) -> int:
-        ''' 加载所有的给定的路径, 返回加载失败的数量'''
-
-        err = 0
-        self.createBuffer.clear()
-        for filepath in files:
-            if not self.__createTile(filepath):
-                err += 1
-        return err
-
-    def _removeTile(self, tileId: Tile):
-        '''移除一张瓦片, 这次移除不会检查是否可以移除'''
-
-        tile = self.__ID2TILE.pop(tileId)
-        self.__NAME2TILE.pop(tile.name)
-        self.recycleList.put(tile.tileId)
-
-    def _nameFromPath(self, filepath:str):
-        return filepath[filepath.rfind("/") + 1:].replace(".png", "").strip()
-
+        Editor.brushMaker.clear()
+        brushList = list()
+        for tile in self.IdToTile.values():
+            brushList.append(Editor.brushMaker.brushFromRawTile(tile))
+        return brushList
+        
     def fetchPixmap(self, tileId):
-        return self.__ID2TILE[tileId].pixmap
+        return self.IdToPixmap[tileId]
 
     def fetch(self, tileId) -> Tile:
-        return self.__ID2TILE[tileId]
+        return self.IdToTile[tileId]
+
+    def hasTile(self, tileId:int) -> bool:
+        return tileId in self.IdToTile
+
+    def exportAsJson(self):
+        '''导出一份json文件, 仅用作转换名称与ID'''
+
+        o = dict()
+        for name, tile in self.nameToTile.items():
+            o.setdefault(name, tile.tileId)
+        return o
+
+    # def toJson(self):
+    #     '''convert value to json '''
+
+    #     recycleList = []
+    #     while self.recycleList.not_empty:
+    #         recycleList.append(self.recycleList.get())
+
+    #     return {
+    #         "currentId":self.ID,
+    #         "recycleList":recycleList
+    #     }
+
+    # def nextTileId(self):
+    #     '''生成下一个瓦片ID'''
+
+    #     if self.recycleList.qsize() > 0:
+    #         return self.recycleList.get()
+    #     output = self.ID
+    #     self.ID += 1
+    #     return output
+
+    # def __checkFile(self, filepath):
+    #     '''检查目标文件是否有效'''
+
+    #     # 检查文件路径是否有效
+    #     if os.path.exists(filepath) and os.path.isfile(filepath):
+            
+    #         # 检查是否有同名的文件
+    #         if self._nameFromPath(filepath) not in self.__NAME2TILE:
+    #             return True
+    #     return False
+            
+    # def __createTile(self, filepath):
+    #     '''创建一块新的瓦片'''
+
+    #     if self.__checkFile(filepath):
+    #         tile = Tile(self._nameFromPath(filepath), self.nextTileId(), filepath)
+    #         self.__ID2TILE.setdefault(tile.tileId, tile)
+    #         self.__NAME2TILE.setdefault(tile.name, tile)
+    #         self.createBuffer.append(tile)
+    #         return True
+    #     return False
+
+    # def takeBrushFromBuffer(self, brushHandler):
+    #     '''将createBuffer里的所有Tile转换为Brush'''
+
+    #     return [brushHandler.brushFromRawTile(tile) for tile in self.createBuffer]
+
+    # def load(self, files:list) -> int:
+    #     ''' 加载所有的给定的路径, 返回加载失败的数量'''
+
+    #     err = 0
+    #     self.createBuffer.clear()
+    #     for filepath in files:
+    #         if not self.__createTile(filepath):
+    #             err += 1
+    #     return err
+
+    # def _removeTile(self, tileId: Tile):
+    #     '''移除一张瓦片, 这次移除不会检查是否可以移除'''
+
+    #     tile = self.__ID2TILE.pop(tileId)
+    #     self.__NAME2TILE.pop(tile.name)
+    #     self.recycleList.put(tile.tileId)
+
+    # def _nameFromPath(self, filepath:str):
+    #     return filepath[filepath.rfind("/") + 1:].replace(".png", "").strip()
 
 class BrushMaker:
 
@@ -379,6 +420,13 @@ class BrushMaker:
 
         self.ID = ID
         self.recycleList = queue.Queue()
+
+    def clear(self):
+        '''清空之前的创建信息'''
+
+        while self.recycleList.qsize() > 0:
+            self.recycleList.get()
+        self.ID = 1
 
     def nextBrushId(self):
 
@@ -395,28 +443,79 @@ class BrushMaker:
             return BrushUnit(self.nextBrushId(), tile)
         return BrushTile(self.nextBrushId(), tile)
 
-    def brushFromRawBrush(self, raw, tilelut: TileLut):
-        '''根据调色盘提供的原始笔刷数据来生成一个笔刷'''
-
-        buf = QPixmap(int(raw.rect.width()), int(raw.rect.height()))
-        buf.fill(QColor(0, 0, 0, 0))
-        painter = QPainter(buf)
+    def makeCombineBrushData(self, raw) -> tuple:
+        '''根据原始笔刷数据来创建一个组合笔刷的指示器与对应的numpy数据
+        以及所用到的瓦片ID组合与所有瓦片的位置记录'''
 
         narr = np.full((raw.width, raw.height), 0)
+        buf = QPixmap(int(raw.rect.width()), int(raw.rect.height()))
+        buf.fill(Editor.ALPHA)
+        tileIds = set()
+        posRecord = dict()
+        painter = QPainter(buf)
         for tileItem in raw.tiles:
-            rawTile = tilelut.fetch(tileItem.tileId)
+            tileIds.add(tileItem.tileId)
+            tileInfo = Editor.tilelut.fetch(tileItem.tileId)            # 获取瓦片信息
+            x, y = tileItem.cx - raw.LB[0], tileItem.cy - raw.LB[1]     # 获取当前Item的局部位置
+            pix = tileInfo.pixmap
+            painter.drawPixmap(x * UNITSIZE, y * UNITSIZE + int(tileItem.offset.y()), pix.width(), pix.height(), pix)
+            narr[x: x + tileInfo.size[0], y: y + tileInfo.size[1]] = tileInfo.narr
+            posRecord.setdefault((x, y), tileItem.tileId)
+        return buf, narr, tileIds, posRecord
 
-            x, y = tileItem.cx - raw.LB[0], tileItem.cy - raw.LB[1]
-            # pixmap
-            painter.drawPixmap(QRect(
-                x * UNITSIZE,
-                y * UNITSIZE + int(tileItem.offset.y()),
-                rawTile.pixmap.width(),
-                rawTile.pixmap.height()
-            ), rawTile.pixmap)
+    def makeCombineBrushDataFromJson(self, o:dict) -> tuple:
+        '''根据保存的json数据来创建一个组合笔刷的指示器与对应的numpy数据'''
 
-            narr[x: x + rawTile.size[0], y: y + rawTile.size[1]] = rawTile.narr
-        return Brush(self.nextBrushId(), raw.tiles, narr, (raw.width, raw.height), buf, raw.LB)
+        size = o["size"]
+        narr = np.full(size, 0)
+        buf = QPixmap(int(size[0] * UNITSIZE), int(size[1] * UNITSIZE))
+        buf.fill(Editor.ALPHA)
+        tileIds = set()
+        posRecord = dict()
+        painter = QPainter(buf)
+        for info in o["tiles"]:
+            pos, tileId = info["pos"], info["tile"]
+            tileIds.add(tileId)
+            tileInfo = Editor.tilelut.fetch(tileId)
+            x, y = pos[0], pos[1]
+            pix = tileInfo.pixmap
+            painter.drawPixmap(x * UNITSIZE, y * UNITSIZE - tileInfo.indicatorOffset[1], pix.width(), pix.height(), pix)
+            narr[x: x + tileInfo.size[0], y: y + tileInfo.size[1]] = tileInfo.narr
+            posRecord.setdefault((x, y), tileId)
+        return buf, narr, tileIds, posRecord
+
+    def brushFromRawBrush(self, raw):
+        '''根据调色盘提供的原始笔刷数据来生成一个笔刷'''
+
+        brush = Brush(self.nextBrushId())
+        brush.initFromRawBrush(raw)
+        return brush
+
+    def brushFromJson(self, o:dict) -> bool:
+        '''从json数据中恢复一个笔刷, 调用该函数前确保瓦片查找表有效'''
+
+        if o["type"] == BRUSH_TYPE.UNIT:
+            return self._unitBrushFromJson(o)
+        elif o["type"] == BRUSH_TYPE.TILE:
+            return self._tileBrushFromJson(o)
+        elif o["type"] == BRUSH_TYPE.COMBINE:
+            return self._combineBrushFromJson(o)
+        return None
+
+    def _combineBrushFromJson(self, o:dict) -> bool:
+        '''从json数据中恢复一个组合笔刷'''
+
+        brush = Brush(o["id"])
+        brush.initFromJson(o)
+        return brush
+
+    def _tileBrushFromJson(self, o:dict):
+        '''从json数据中恢复一个瓦片笔刷'''
+        return BrushTile(o["id"], Editor.tilelut.fetch(o["tileId"]))
+
+    def _unitBrushFromJson(self, o:dict):
+        '''从json数据中恢复一个单元瓦片笔刷'''
+        return BrushUnit(o["id"], Editor.tilelut.fetch(o["tileId"]))
 
 class Tilemap:
     '''存储一张地图的数据信息, 和渲染没有任何关系
@@ -658,6 +757,13 @@ class Tilemap:
             self.data[ox: orx, oy: ory] = rawBrush.narr
             return False
 
+class BRUSH_TYPE:
+    '''笔刷的三种类型'''
+
+    UNIT = 0
+    TILE = 1
+    COMBINE = 2
+
 class BrushUnit:
     ''' 针对一个最小单元点位的笔刷, 由于默认的系统单位点大小是8*8, 所以该
     笔刷用处不是很大 '''
@@ -674,6 +780,11 @@ class BrushUnit:
         self.brushName = "#" + str(Id)
         self.size = UNITCSIZE
         self.narr = np.full(self.size, self.Id)
+
+    def toJson(self):
+        '''转换为json数据'''
+
+        return {"type": BRUSH_TYPE.UNIT, "id": self.Id, "tileId":self.tileId}
 
     def need(self, tileId):
         return self.tileId == tileId
@@ -712,8 +823,12 @@ class BrushTile:
         self.indicator = QGraphicsPixmapItem(tile.pixmap)
         self.indicatorSize = (tile.size[0] * UNITSIZE, tile.size[1] * UNITSIZE)
         self.indicatorOffset = QPoint(0, tile.pixmap.height() - self.indicatorSize[1])
-
         self.indicatorRoom = QGraphicsPixmapItem(tile.pixmap)
+
+    def toJson(self):
+        '''转换为Json数据'''
+
+        return {"type":BRUSH_TYPE.TILE, "id":self.Id, "tileId":self.tileId}
 
     def need(self, tileId):
         return self.tileId == tileId
@@ -737,36 +852,45 @@ class BrushTile:
 class Brush:
     '''一个由多个瓦片构成的笔刷'''
 
-    def __init__(self, Id:int, tiles:list, narr:np.ndarray, size:tuple, pixmap:QPixmap, LB:tuple):
-        '''
-        @ID: 笔刷的ID
-        @tileIds: 笔刷所含有的所有瓦片的ID
-        @narr: 笔刷的numpy数据
-        @size: 笔刷的网格大小
-        @pixmap: 组合的pixmap, 这是一个指示器
-        '''
+    def __init__(self, Id:int):
+        '''@ID: 笔刷的ID'''
         
         self.Id = Id
-        self.narr = narr
-        self.size = size
-        self.pixmap = pixmap
-        self.brushName = "#" + str(Id) 
+
+    def initFromRawBrush(self, raw):
+        '''根据选框数据来初始化当前笔刷
+        @raw: 原始笔刷数据(即选框数据)'''
+
+        self.size = (raw.width, raw.height)                                                                     # 获取当前的网格大小
+        self.pixmap, self.narr, self.tileIds, self.posRecord = Editor.brushMaker.makeCombineBrushData(raw)      # 获取组合指示器与numpy数据
+        self.init()
+
+    def initFromJson(self, o:dict):
+        '''从JSON数据中恢复当前的笔刷'''
+
+        self.size = o["size"]               # 获取大小
+        self.pixmap, self.narr, self.tileIds, self.posRecord = Editor.brushMaker.makeCombineBrushDataFromJson(o)
+        self.init()
+
+    def init(self):
+        '''通用初始化'''
         self.indicator = QGraphicsPixmapItem(self.pixmap)
-        self.indicatorSize = (size[0] * UNITSIZE, size[1] * UNITSIZE)
+        self.indicatorRoom = QGraphicsPixmapItem(self.pixmap)
+        self.indicatorSize = (self.size[0] * UNITSIZE, self.size[1] * UNITSIZE)
         self.indicatorOffset = QPointF()
 
-        self.indicatorRoom = QGraphicsPixmapItem(self.pixmap)
+    def toJson(self):
+        '''转换为json数据'''
 
-        self.tileIds = set()
-        self.posRecord = dict()
-        for tileItem in tiles:
-            self.tileIds.add(tileItem.tileId)
-
-            # 记录TileItem的坐标位置
-            self.posRecord.setdefault((tileItem.cpos[0] - LB[0], tileItem.cpos[1] - LB[1]), (
-                tileItem.tileId,
-                Editor.tilelut.fetchPixmap(tileItem.tileId)
-            ))
+        tiles = list()
+        for pos, value in self.posRecord.items():
+            tiles.append({"pos":pos, "tile":value})
+        return {
+            "type":BRUSH_TYPE.COMBINE,              # 组合笔刷
+            "id":self.Id,
+            "size":self.size,
+            "tiles":tiles
+        }
 
     def need(self, tileId):
         '''检查该笔刷是否需要某个瓦片作为基础'''
@@ -783,7 +907,7 @@ class Brush:
 
         items = list()
         for _cpos, tile in self.posRecord.items():
-            item = TileItem(view, tile[0], (cpos.x() + _cpos[0], cpos.y() + _cpos[1]), tile[1])
+            item = TileItem(view, tile, (cpos.x() + _cpos[0], cpos.y() + _cpos[1]), Editor.tilelut.fetchPixmap(tile))
             item.repos()
             items.append(item)
         return items
@@ -794,13 +918,13 @@ class Brush:
         items = list()
         roomOffset = entryPoint * UNITSIZE
         for _cpos, tile in self.posRecord.items():
-            item = RoomTileItem(view, tile[0], (cpos.x() + _cpos[0], cpos.y() + _cpos[1]), tile[1])
+            item = RoomTileItem(view, tile, (cpos.x() + _cpos[0], cpos.y() + _cpos[1]), Editor.tilelut.fetchPixmap(tile))
             item.reposOffset(roomOffset)
             items.append(item)
         return items
 
     def __str__(self):
-        return self.brushName
+        return "#" + str(self.Id)
 
 class RawBrushCopy:
     '''RawBrush的数据副本'''
@@ -811,7 +935,6 @@ class RawBrushCopy:
         self.tiles = [tile.clone() for tile in tiles]
         for tile in self.tiles:
             tile.cpos = (tile.cpos[0] - LB[0], tile.cpos[1] - LB[1])
-            print(tile.cpos)
 
 class RawBrush:
     '''原始瓦片数据, 记录一组瓦片, 每张瓦片的位置, 和处于边界位置的瓦片'''
@@ -887,12 +1010,24 @@ class BrushContainer:
         '''检查目标容器中是否已经有了brush'''
         return brush in self.brushList
 
+    def appendBrush(self, brush: Brush) -> bool:
+        if self.hasBrush(brush):
+            return False
+        self.brushList.append(brush)
+        return True
 
+    def toJson(self) -> dict:
+        '''转换为json数据'''
 
+        return {"name":self.name, "brushList":[brush.toJson() for brush in self.brushList]}
 
+    def fromJson(self, o:dict):
+        '''清空当前的数据并从json数据中还原所有的信息'''
 
-
-
+        self.name = o["name"]
+        self.brushList.clear()
+        for brush in o["brushList"]:
+            self.brushList.append(Editor.brushMaker.brushFromJson(brush))
 
 
 
@@ -918,16 +1053,12 @@ class BrushContainer:
 class EditorBrushWindow(EuclidWindow):
     '''笔刷窗体'''
 
-    def __init__(self, tilelut: TileLut, brushMaker: BrushMaker, parent=None):
+    def __init__(self, parent=None):
         super().__init__(parent=parent, title="笔刷库")
-        
-        # 数据信息
-        self.tilelut = tilelut
-        self.brushMaker = brushMaker
 
         # 容器渲染器
         self.brushBoxRenderer = EditorBrushBoxRenderer()
-        self.brushBoxList = EditorBrushContainerList(self.tilelut, self.brushMaker, self.brushBoxRenderer)
+        self.brushBoxList = EditorBrushContainerList(self.brushBoxRenderer)
         self.add(self.brushBoxList)
         self.addh(self.brushBoxRenderer)
 
@@ -938,12 +1069,41 @@ class EditorBrushWindow(EuclidWindow):
 
 
         # 脚手架部分
-        self.tilelut.load([
-            "./tiles/dt_farm_Tile_1.png",
-            "./tiles/testTile.png"
-        ])
-        for brush in self.tilelut.takeBrushFromBuffer(self.brushMaker):
-            self.brushBoxList.tileLib.brushList.append(brush)
+        # self.tilelut.load([
+        #     "./tiles/dt_farm_Tile_1.png",
+        #     "./tiles/testTile.png"
+        # ])
+        # for brush in self.tilelut.takeBrushFromBuffer(self.brushMaker):
+        #     self.brushBoxList.tileLib.brushList.append(brush)
+
+    def toJson(self):
+        '''将除了瓦片笔刷之外的所有笔刷都转换为json数据'''
+        return self.brushBoxList.toJson()
+
+    def fromJson(self, o):
+        '''从json数据中恢复当前的笔刷库'''
+        self.brushBoxList.fromJson(o)
+
+    def loadTileBrushes(self, brushList):
+        '''加载所有的瓦片笔刷'''
+
+        # 先清空之前的笔刷信息
+        self.brushBoxList.tileLib.brushList.clear()
+        for brush in brushList:
+            self.brushBoxList.tileLib.appendBrush(brush)
+        self.brushBoxRenderer.reload()
+
+    def invalid(self):
+        '''禁用当前笔刷窗体的控件'''
+
+        self.brushBoxList.button.invalid()
+        self.removeTileBtn.invalid()
+
+    def resume(self):
+        '''恢复当前笔刷窗体的控件'''
+
+        self.brushBoxList.button.resume()
+        self.removeTileBtn.resume()
 
     def removeCurrentBrush(self):
         '''移除当前选中的笔刷'''
@@ -965,11 +1125,17 @@ class EditorBrushWindow(EuclidWindow):
                     _container.brushList.remove(brush)
                     self.brushBoxRenderer.reload()
                     Editor.onBrushClear()
+                # else:
+                #     # 如果是瓦片库的笔刷，则说明要删除一块瓦片，这需要先确保这块瓦片已经不被任何单位占用
+                #     if Editor.removeTile(brush.tileId):
+                #         # 瓦片删除成功，删除当前的瓦片笔刷
+                #         self.brushBoxList.tileLib.brushList.remove(brush)
+                #         self.brushBoxRenderer.reload()
 
 class EditorBrushContainerList(_EuclidElasticWidget):
     '''笔刷容器列表'''
 
-    def __init__(self, lut: TileLut, brushHandler: BrushMaker, brushContainerRenderer, tileListName="瓦片库"):
+    def __init__(self, brushContainerRenderer, tileListName="瓦片库"):
         # 所有的笔刷容器列表
         # 每个容器都会有数个笔刷, 笔刷列表可以创建也可以删除, 
         # 唯一不能删除的列表是基础的瓦片列表,每个笔刷都是可以复制和引用的
@@ -980,22 +1146,67 @@ class EditorBrushContainerList(_EuclidElasticWidget):
         self.tileLibName = tileListName
         self.tileLib = BrushContainer(tileListName)
         self.brushContainerDatas = {tileListName:self.tileLib}
-        self.lut = lut
-        self.brushMaker = brushHandler
         self.renderer = brushContainerRenderer
         self.setup()
         self.containerList.add(tileListName)
         
         # other
         self.currentContainer = None
-    
+
+    def toJson(self):
+        '''将除了瓦片库之外的所有笔刷都转换为json数据'''
+
+        output = list()
+        for name, container in self.brushContainerDatas.items():
+            if name != self.tileLibName:
+                output.append(container.toJson())
+        return output
+
+    def fromJson(self, o:list):
+        '''从json数据中恢复当前的笔刷库列表, 这个操作将会清空当前的所有数据, 执行该函数之前先确保
+        瓦片库已经加载了'''
+
+        # 写入数据
+        self.brushContainerDatas.clear()
+        self.brushContainerNames.clear()
+        self.brushContainerNames.append(self.tileLibName)
+        self.brushContainerDatas.setdefault(self.tileLibName, self.tileLib)
+        for brushContainer in o:
+            container = BrushContainer("tmp")
+            container.fromJson(brushContainer)
+            self.brushContainerDatas.setdefault(container.name, container)
+            self.brushContainerNames.append(container.name)
+
+        # 更新渲染
+        self.containerList.clear()
+        for name in self.brushContainerNames:
+            self.containerList.add(name)
+
+    # def openTiles(self):
+    #     '''添加一组新的瓦片'''
+
+    #     filenames, filetype = QFileDialog.getOpenFileNames(None, "添加瓦片", filter="PNG文件(*.png)")
+    #     if len(filenames) > 0:
+    #         count = Editor.tilelut.load(filenames)
+    #         for brush in Editor.tilelut.takeBrushFromBuffer(Editor.brushMaker):
+    #             self.tileLib.appendBrush(brush)
+    #         warning("添加新的瓦片", f"有{count}块瓦片加载失败")
+
     def needTile(self, tileId):
         '''检查所有的笔刷是否需要该ID'''
 
-        for brushContainer in self.dataList:
+        for brushContainer in self.brushContainerDatas.values():
+            if brushContainer.name == self.tileLibName:
+                continue
             for brush in brushContainer.brushList:
                 if isinstance(brush, Brush):
                     if brush.need(tileId):
+                        return True
+                elif isinstance(brush, BrushTile):
+                    if brush.tileId == tileId:
+                        return True
+                elif isinstance(brush, BrushUnit):
+                    if brush.tileId == tileId:
                         return True
         return False
         
@@ -1056,8 +1267,11 @@ class EditorBrushContainerList(_EuclidElasticWidget):
     
     def setup(self):
         self.button = EuclidButton(size=(110, 20), title="添加笔刷组", callback=self.addGroup)
-        self.button.move(0, 0)
         self.button.setParent(self)
+
+        # self.addTileBtn = EuclidButton(size=(110, 20), title="添加瓦片", callback=self.openTiles)
+        # self.addTileBtn.move(0, 25)
+        # self.addTileBtn.setParent(self)
 
         self.containerList = SimpleListWidgetSingleBtn(self.onRenamed, self.onDeleted, self.onChoosed, self.onMoveBrush, parent=self)
         self.containerList.setObjectName("EditorBrushContainerList")
@@ -1166,7 +1380,7 @@ class EditorBrushIndicator(QLabel):
 class EditorBrushBoxRenderer(_EuclidScrollArea):
     '''笔刷容器'''
 
-    def __init__(self, callback=None):
+    def __init__(self):
         super().__init__(lambda x:QSize(x.width() - 200, x.height() - 30), size=(100, 100))
         self.setStyleSheet("border:1px solid #3f3f3f;border-radius:2px;")
         self.currentSize = (50, 64)
@@ -1350,6 +1564,17 @@ class EditorToolType:
     # 不允许在此类工具使用期间切换工具
     ROOMCREATOR = 4
     COPY = 5
+    POSITION_FINDER = 6
+
+    @staticmethod
+    def isConvertable(toolType):
+        '''检查当前工具是否可以切换'''
+        return toolType < 4
+
+    @staticmethod
+    def isNotConvertable(toolType):
+        return toolType >= 4
+
 
 class ITool:
     '''Tool接口, 用于定义Tool的基本行为'''
@@ -1614,6 +1839,13 @@ class RoomBrushTool(BrushTool):
                 if self.currentBrush.draw(cpos, self.tilemap):
                     self.drawAs(cpos, indicatorPosition)
 
+    def onRelease(self, event):
+        '''当数据发送改变时, 保存当前图层的快照信息'''
+
+        if self.canDraw:
+            self.canDraw = False
+            self.layer.saveSnapshotWhenChanged()
+
 class MarqueeTool(ITool):
 
     def __init__(self, renderer: QGraphicsScene, tilemap: Tilemap):
@@ -1776,6 +2008,7 @@ class RoomMarqueeTool(MarqueeTool):
                     self.borderPos += QPointF(coffset[0] * UNITSIZE, coffset[1] * UNITSIZE)
                     self.rawBrushBorder.setPos(self.borderPos)
                     self.clearLocationBorder()
+                    self.layer.saveSnapshot()
                     return
         self.resumeRawBrush()
         self.clearLocationBorder()
@@ -1897,7 +2130,7 @@ class RoomEraseTool(EraseTool):
                 if item.checkRoomLayer(self.layer.roomName, self.layer.name):
                     self.tilemap.erase(item)
                     self.renderer.removeItem(item)
-                    self.layer.tiles.remove(item)
+                    self.layer.removeTile(item)
 
     def onClick(self, event):
 
@@ -1912,6 +2145,11 @@ class RoomEraseTool(EraseTool):
             self.indicator.setPos(self.rendererView.mapToScene(event.pos()) - self.offset)
             if self.canDraw and self.layer.visible:
                 self.eraseItems()
+
+    def onRelease(self, event):
+        if self.canDraw:
+            self.canDraw = False
+            self.layer.saveSnapshotWhenChanged()
 
 class RoomTool(ITool):
     '''提供一个用于框选房间范围的工具'''
@@ -2116,6 +2354,9 @@ class RoomFloodFillTool(ITool):
             lspos = EditorUtils.cposUnit(spos) * UNITSIZE - self.currentBrush.indicatorOffset
             self.currentBrush.indicator.setPos(lspos)
 
+    def onRelease(self, event):
+        self.layer.saveSnapshotWhenChanged()
+
 class CopyTool(ITool):
     '''复制工具, 当复制确定时, 即复制当前RawBrush当中地数据
     由玩家来确定放置到何处'''
@@ -2127,7 +2368,7 @@ class CopyTool(ITool):
         self.copyRawData = None
         self.copyItems = list()
         self.copyBorder = QGraphicsRectItem()
-        self.copyBorder.setPen(QPen(QColor("#3dff6e")))
+        self.copyBorder.setPen(QColor("#3dff6e"))
         self.currentLayer = None
         self.roomEntryPoint = QPoint()
         self.output = output
@@ -2137,8 +2378,6 @@ class CopyTool(ITool):
     def setCopyData(self, brush: RawBrush):
         '''复制当前地rawBrush数据'''
 
-        # print(brush.narr)
-        # print(brush.width)
         self.copyRawData = brush.clone()
         self.copyBorder.setRect(0, 0, brush.width * UNITSIZE, brush.height * UNITSIZE)
         self.hasCopyData = True
@@ -2170,7 +2409,6 @@ class CopyTool(ITool):
             # 确认复制
             cposRaw = EditorUtils.cposUnit(self.rendererView.mapToScene(event.pos()))
             cpos = cposRaw - self.roomEntryPoint
-            print(cpos)
             if self.currentLayer.tilemap.drawRaw(cpos, self.copyRawData.narr):
                 # 确认可以复制数据
                 roomOffset = self.roomEntryPoint * UNITSIZE
@@ -2182,6 +2420,7 @@ class CopyTool(ITool):
                     _tile.reposOffset(roomOffset)
                     self.renderer.addItem(_tile)
                     self.currentLayer.addTile(_tile)
+                self.currentLayer.saveSnapshotWhenChanged()
                 self.toNormal()
         elif event.button() == Qt.RightButton:
             # 取消复制
@@ -2191,6 +2430,48 @@ class CopyTool(ITool):
     def onMove(self, event):
         spos = self.rendererView.mapToScene(event.pos())
         self.copyBorder.setPos(EditorUtils.latticeUnit(spos))
+
+class PositionFinder(ITool):
+    '''移动房间工具'''
+
+    def __init__(self, renderer: QGraphicsScene, toNormal: callable):
+        super().__init__("移动房间工具", EditorToolType.POSITION_FINDER)
+        self.renderer = renderer
+        self.rendererView = renderer.views()[0]
+        self.border = QGraphicsRectItem()
+        self.border.setPen(QColor("#3dff6e"))
+
+        self.handle = None
+        self.toNormal = toNormal
+
+    def setBorder(self, size: QSizeF):
+        self.border.setRect(0, 0, size.width(), size.height())
+
+    def setHandle(self, handle):
+        '''重设当前的处理函数'''
+        self.handle = handle
+    
+    def work(self):
+        '''启动位置工具'''
+
+        self.renderer.addItem(self.border)
+
+    def done(self):
+        '''关闭位置工具'''
+
+        self.renderer.removeItem(self.border)
+
+    def onClick(self, event):
+        if event.button() == Qt.LeftButton:
+            if self.handle != None:
+                cpos = EditorUtils.cposUnit(self.rendererView.mapToScene(event.pos()))
+                self.handle(cpos)
+        elif event.button() == Qt.RightButton:
+            self.toNormal()
+
+    def onMove(self, event):
+        spos = self.rendererView.mapToScene(event.pos())
+        self.border.setPos(EditorUtils.latticeUnit(spos))
 
 
 # --------------- 瓦片实体 --------------------
@@ -2296,14 +2577,28 @@ class TileItem(QGraphicsPixmapItem):
         option.state = QStyle.State_None
         super().paint(painter, option, widget)
 
-class ModelItem(QGraphicsPixmapItem):
+class TileModel:
     '''用于存储到模板库中的TileItem'''
 
     def __init__(self, tileId:int, cpos:tuple, pixmap:QPixmap):
-        super().__init__(pixmap)
-        self.setFlag(QGraphicsItem.ItemIsPanel)
+        self.pixmap = pixmap
         self.tileId = tileId
         self.cpos = cpos
+
+    def createItem(self):
+        '''create a new TileItem represent this'''
+
+        item = QGraphicsPixmapItem(self.pixmap)
+        item.setFlag(QGraphicsItem.ItemIsPanel)
+        item.setPos(QPointF(*self.cpos) * UNITSIZE)
+        return item
+
+    def createRoomItem(self, view, offset: QPointF):
+        '''当还原时, 创建一个真实的Item'''
+
+        item = RoomTileItem(view, self.tileId, self.cpos, self.pixmap)
+        item.reposOffset(offset)
+        return item
 
 class RoomTileItem(TileItem):
     '''为房间对象准备的TileItem, 主要增加房间和层级ID信息'''
@@ -2332,10 +2627,13 @@ class RoomTileItem(TileItem):
         self.cpos = (self.cpos[0] + offset[0], self.cpos[1] + offset[1])
         self.reposOffset(sEntryPoint)
 
+
+# --------------- 调色盘编辑器 -------------------
+
 class EditorPalette(EuclidWindow):
     ''' 地图编辑器调色盘'''
 
-    def __init__(self, tileLut: TileLut, parent=None, paletteCanvasSize=(32, 32)):
+    def __init__(self, parent=None, paletteCanvasSize=(32, 32)):
         '''初始化功能菜单, 调色盘绘制界面和预览界面'''
 
         super().__init__(parent=parent, title="调色盘")
@@ -2349,7 +2647,6 @@ class EditorPalette(EuclidWindow):
         self.tilemapBorder.setFlag(QGraphicsItem.ItemIsPanel)
         self.setup()
 
-        self.tileLut = tileLut                              # 瓦片查找表
         self.editable = False                               # 当前是否可以编辑调色盘
         self.tilemap = Tilemap(csize=paletteCanvasSize)     # 调色盘唯一要维护的数据层
         self.posBuf = QPointF()
@@ -2422,9 +2719,8 @@ class EditorPalette(EuclidWindow):
             if brushList is None:
                 self.output("请选择一个非默认的笔刷组", 2)
             else:
-                brushList.brushList.append(Editor.brushMaker.brushFromRawBrush(self.marqueeTool.rawBrush, self.tileLut))
+                brushList.brushList.append(Editor.brushMaker.brushFromRawBrush(self.marqueeTool.rawBrush))
                 Editor.brushContainer.reload()
-                
 
     def resetItemFlags(self, flags):
 
@@ -2549,16 +2845,35 @@ class EditorPalette(EuclidWindow):
         self.debugBtn2 = EuclidButton(title="测试2", callback=self.debug2)
         self._container.addh(self.debugBtn2)
 
+class LayerSnapshot:
+    '''层级快照, 记录当前层级的数据状态, 以备后续还原'''
 
+    def __init__(self, layer):
+        '''和复制不太一样, 快照只是保存所有瓦片的ID和位置, 其他数据一律从瓦片查找表中获取'''
 
+        # 记录所有瓦片的ID和位置，以备后续还原
+        self.narr = np.copy(layer.tilemap.data)
+        self.tiles = dict()
+        for tile in layer.tiles:
+            self.tiles.setdefault(tile.cpos, tile.tileId)
 
+    def needTile(self, tileId:int) -> bool:
+        return np.any(self.narr == tileId)
 
+    def restore(self, layer, view, offset, renderer):
+        layer.tilemap.data = self.narr
 
+        # 清空原来的数据
+        for tile in layer.tiles:
+            renderer.removeItem(tile)
+        layer.tiles.clear()
 
-
-
-
-
+        # 将快照中的数据重新录入层级
+        for cpos, Id in self.tiles.items():
+            item = RoomTileItem(view, Id, cpos, Editor.tilelut.fetchPixmap(Id))
+            item.reposOffset(offset)
+            renderer.addItem(item)
+            layer.addTile(item)
 
 # ------------------------- 主编辑器 ---------------------------------
 
@@ -2571,6 +2886,7 @@ class MapEditorRuntimePreviewWindow(EuclidWindow):
         self.rendererView.setScene(renderer)
         self.rendererView.setSelectable(False)
         self.renderer = renderer
+        self.hasChangeSelectable = False
         self.setup()
 
     def empty(self, event):
@@ -2578,6 +2894,15 @@ class MapEditorRuntimePreviewWindow(EuclidWindow):
 
     def onClick(self, event, valid):
         pass
+
+    def enterEvent(self, ev) -> None:
+        self.hasChangeSelectable = Editor.mapEditor._disableSelections()
+        return super().enterEvent(ev)
+
+    def leaveEvent(self, ev) -> None:
+        if self.hasChangeSelectable:
+            Editor.mapEditor._enableSelections()
+        return super().leaveEvent(ev)
 
     def setup(self):
         self.add(EuclidElasticDocker(EuclidGeometry.fullsizeGap((10, 10)), self.rendererView, size=(100, 100)))
@@ -2598,13 +2923,71 @@ class RoomHandlerWindow(EuclidWindow):
         self.listView.setObjectName("EditorBrushContainerList")
         self.stringListModel = QStringListModel([])
         self.listView.setModel(self.stringListModel)
+        self.listView.setEditTriggers(QAbstractItemView.NoEditTriggers)
 
         self.libNames = ["默认模板库"]
         self.libs = {"默认模板库":[]}
         self.currentLibName = "默认模板库"
-
+        self.currentRoom = None
         self.setup()
-        EuclidWindow.setOnTop(self)
+
+    def toJson(self):
+        '''转换为json数据'''
+
+        output = list()
+        for name in self.libNames:
+            lib = self.libs[name]
+            libData = [room.toJson() for room in lib]
+            output.append({"name":name,"roomList":libData})
+        return output
+
+    def fromJson(self, libList):
+        '''从json数据中还原信息'''
+
+        self.libNames.clear()
+        self.libs.clear()
+        for libInfo in libList:
+            self.libNames.append(libInfo["name"])
+            lib = list()
+            for o in libInfo["roomList"]:
+                room = Room(o["name"], tuple(o["pos"]), tuple(o["size"]), createRoomBorder=False)
+                room.fromJsonAsTemplate(o)
+                lib.append(room)
+            self.libs.setdefault(libInfo["name"], lib)
+
+        self.comboBox.clear()
+        self.comboBox.addItems(self.libNames)
+        if len(self.libNames) > 0:
+            self.comboBox.setCurrentIndex(0)
+            self.onGroupChanged(0)
+
+    def invalid(self):
+        '''禁用窗体控件'''
+
+        self.addGroupBtn.invalid()
+        self.removeGroupBtn.invalid()
+        self.recordBtn.invalid()
+        self.generateBtn.invalid()
+        self.removeRoomBtn.invalid()
+
+    def resume(self):
+        '''恢复当前的窗体'''
+
+        self.addGroupBtn.resume()
+        self.removeGroupBtn.resume()
+        self.recordBtn.resume()
+        self.generateBtn.resume()
+        self.removeRoomBtn.resume()
+
+    def fetchCurrentTemplate(self):
+        '''获取当前的模板对象'''
+
+        if self.currentLibName is None:
+            return None
+        roomIdx = self.listView.currentIndex().row()
+        if roomIdx < 0:
+            return None
+        return self.libs[self.currentLibName][self.listView.currentIndex().row()]
 
     def needTile(self, tileId) -> bool:
         '''检查模板库的中任何一个模板是否用到了目标瓦片'''
@@ -2620,12 +3003,11 @@ class RoomHandlerWindow(EuclidWindow):
         room = self.libs[self.currentLibName][idx]
         self.currentTemplateInfo.warning(f"{room.name}:房间大小_{room.csize}")
 
-        for item in self.renderer.items():
-            self.renderer.removeItem(item)
-
+        self.renderer.clear()
         for layer in room.layers.values():
             for tile in layer.tiles:
-                self.renderer.addItem(tile)
+                self.renderer.addItem(tile.createItem())
+        self.renderer.addItem(room.createRoomBorder())
 
     def onRoomChoosed(self, room):
         '''当选择了一个新的房间'''
@@ -2645,40 +3027,97 @@ class RoomHandlerWindow(EuclidWindow):
 
         if self.currentRoom is None:
             warning("存储为模板", "当前没有房间信号")
+        elif self.currentLibName is None:
+            warning("存储为模板", "当前没有选中任何组")
         else:
-            texts = self.stringListModel.stringList()
-            if self.currentRoom.name in texts:
-                warning("存储为模板", "组中已有同名模板")
+            if self.currentRoom.isEmptyRoom():
+                warning("存储为模板", "空房间不可记录为模板")
             else:
-                texts.append(self.currentRoom.name)
-                self.stringListModel.setStringList(texts)
-                self.libs[self.currentLibName].append(self.currentRoom.clone())
+                dialog = ProjectCreator(self._record, None, title="存储为模板", content="输入模板名")
+                dialog.exec_()
+
+    def _record(self, name):
+        '''将当前房间存储为模板'''
+
+        titles = self.stringListModel.stringList()
+        if name in titles:
+            warning("存储为模板", "组中已有同名模板")
+            return False
+        else:
+            titles.append(name)
+            self.stringListModel.setStringList(titles)
+            roomClone = self.currentRoom.clone()
+            roomClone.name = name
+            self.libs[self.currentLibName].append(roomClone)
+            return True
 
     def _addGroup(self, name):
         '''创建一个新的模板'''
 
         if name in self.libNames:
             warning("错误报告", "存在相同名称的组")
+            return False
         else:
             self.libNames.append(name)
             self.libs.setdefault(name, list())
             self.comboBox.addItem(name)
+            return True
 
     def addGroup(self):
         dialog = ProjectCreator(self._addGroup, None, title="新建模板组",content="输入组名")
         dialog.exec_()
     
     def onGroupChanged(self, index):
+        print(f"选中组:{self.libNames[index]}")
         self.currentLibName = self.libNames[index]
         self.loadGroup(self.libs[self.currentLibName])
 
     def removeGroup(self):
-        self.comboBox.removeItem(self.comboBox.currentIndex())
-
+        if questionDelete("是否删除组") == QMessageBox.Ok:
+            idx = self.comboBox.currentIndex()
+            self.comboBox.removeItem(idx)
+            self.libNames.pop(idx)
+            
+            currentIdx = self.comboBox.currentIndex()
+            if currentIdx != -1:
+                self.currentLibName = self.libNames[currentIdx]
+                self.loadGroup(self.libs[self.currentLibName])
+            else:
+                self.currentLibName = None
+                self.stringListModel.setStringList([])
+        
     def loadGroup(self, roomList:list):
         '''在listView中加载一个当前的组'''
 
-        self.listView.setModel([room.name for room in roomList])
+        self.stringListModel.setStringList([room.name for room in roomList])
+        self.renderer.clear()
+
+    def restoreRoom(self):
+        '''将当前重新还原到地图编辑器中'''
+
+        template = self.fetchCurrentTemplate()
+        if template is None:
+            warning("还原房间", "请选择要还原的房间")
+        else:
+            Editor.mapEditor.onRestoreRoom(template)
+
+    def removeRoom(self):
+        '''删除当前的模板'''
+
+        if self.currentLibName != None:
+            templateList = self.libs[self.currentLibName]
+            idx = self.listView.currentIndex().row()
+            if idx >= 0:
+                if questionDelete("是否删除模板") == QMessageBox.Ok:
+                    self.renderer.clear()
+                    templateList.pop(idx)
+                    titles = self.stringListModel.stringList()
+                    titles.pop(idx)
+                    self.stringListModel.setStringList(titles)
+            else:
+                warning("删除当前模板", "当前没有选中房间")
+        else:
+            warning("删除当前模板", "当前没有组")
 
     def empty(self, ev):
         pass
@@ -2696,13 +3135,15 @@ class RoomHandlerWindow(EuclidWindow):
         self.recordBtn = EuclidButton(title="存储为模板", callback=self.record)
         self.addGroupBtn = EuclidButton(title="添加组", callback=self.addGroup)
         self.removeGroupBtn = EuclidButton(title="删除组", callback=self.removeGroup)
-        restyle(self.removeGroupBtn, "EuclidButtonRed")
+        self.generateBtn = EuclidButton(title="还原房间", callback=self.restoreRoom)
+        self.removeRoomBtn = EuclidButton(title="删除房间", callback=self.removeRoom)
+        restyle(self.removeGroupBtn, EuclidNames.BUTTON_RED)
+        restyle(self.removeRoomBtn, EuclidNames.BUTTON_RED)
 
         self.comboBox = EuclidComboBox(lambda x:QSize(x.width() - 10, 15), size=(80, 20))
         self.comboBox.addItems(self.libNames)
         self.comboBox.currentIndexChanged.connect(self.onGroupChanged)
         self.currentTemplateInfo = EuclidElasticLabel(lambda x: QSize(x.width() - 20, 14), size=(50, 14), text="当前没有模板")
-
 
         self.add(self.indicator)
         self.addh(self.statusInfo)
@@ -2710,15 +3151,15 @@ class RoomHandlerWindow(EuclidWindow):
         self.addh(self.contentBar)
         self.add(EuclidLabel(text="模板组", size=(40,20)))
         self.addh(EuclidDocker(self.comboBox, size=(120, 20)))
-        
 
         self.add(self.addGroupBtn)
         self.addh(self.removeGroupBtn)
-        self.addh(self.recordBtn)
-        self.add(EuclidElasticDocker(lambda x: QSize(80, x.height() - 100), self.listView, size=(50, 50)))
-        
+        self.add(self.recordBtn)
+        self.addh(self.generateBtn)
+        self.addh(self.removeRoomBtn)
+        self.add(EuclidElasticDocker(lambda x: QSize(80, x.height() - 125), self.listView, size=(50, 50)))
 
-        resizefunc = lambda x: QSize(x.width() - 95, x.height() - 100)
+        resizefunc = lambda x: QSize(x.width() - 95, x.height() - 125)
         self.addh(EuclidElasticDocker(resizefunc, self.rendererView, size=(50, 50)))
         self.add(self.currentTemplateInfo)
 
@@ -2737,12 +3178,12 @@ class MapEditor(EuclidWindow):
         self.eraseTool = RoomEraseTool(self.renderer)
         self.roomTool = RoomTool(self.onRoomBorderMaked, self.renderer)
         self.floodFillTool = RoomFloodFillTool(self.renderer, self)
-        self.copyTool = CopyTool(self.renderer, self.info.normal, self.cancelCopy)
+        self.copyTool = CopyTool(self.renderer, self.info.normal, lambda:self.convertTool(EditorToolType.MARQUEE))
+        self.positionFinder = PositionFinder(self.renderer, self._cancelRestore)
         self.emptyTool = ITool("空白", EditorToolType.NONE)
 
         self.currentTool = self.emptyTool
         self.projectName = None
-        self.hasSaved = True
         self.posBuf = QPointF()
 
         # 记录房间信息
@@ -2753,38 +3194,107 @@ class MapEditor(EuclidWindow):
         self.isAdjustRoom = False
         self.adjustRoom = None
 
+    def exportMapData(self):
+        '''导出现有的地图数据, 导出瓦片查找表和房间数据到同一个json文件中'''
+
+        if self.rooms != None:
+            lut = Editor.tilelut.exportAsJson()
+            rooms = self.toJson()
+            return {"lut":lut, "rooms":rooms}
+        else:
+            warning("导出数据失败", "当前没有可导出内容(- -.)")
+            return None
+
+    def toJson(self):
+        '''将所有的房间信息转换为json数据'''
+        return [room.toJson() for room in self.rooms.values()]
+
+    def fromJson(self, o:list):
+        '''用当前的json数据来覆盖现有的房间列表'''
+
+        self.rooms = dict()
+        for info in o:
+            room = Room(info["name"], info["pos"], info["size"])
+            room.fromJsonInMapEditor(info, self, self.renderer)
+            self.rooms.setdefault(info["name"], room)
+        self.roomList.setRooms(self.rooms)
+
+    def invalid(self):
+        '''禁用当前窗体的控件'''
+
+        self.roomList.invalid()
+        self.layerList.invalid()
+
+    def resume(self):
+        '''恢复当前窗体的控件'''
+
+        self.layerList.resume()
+        self.roomList.resume()
+
     def saveCurrentData(self):
         '''保存当前的数据 '''
 
-        self.hasSaved = True
+    def checkHasSaved(self):
+        '''检查是否有数据发生变动'''
 
-    def createNewInstanceProject(self):
-        '''创建一个新的副本工程'''
+        for room in self.roomList.rooms.values():
+            if not room.checkHasSaved():
+                return False
+        return True
 
-        if not self.hasSaved:
-            result = QMessageBox.question(None, "创建新的工程", "当前数据还未保存, 是否存储", QMessageBox.Save|QMessageBox.Discard|QMessageBox.Cancel)
-            if result == QMessageBox.Save:
-                self.saveCurrentData()
-            elif result == QMessageBox.Cancel:
-                self.info.normal("取消创建副本")
-                return
-        # 创建一个新的工程文件
-        def _create(projectName:str):
-            self.projectName = projectName
-            self.hasSaved = True
-            self.rooms = dict()
-            self.roomList.setRooms(self.rooms)
-            self.statusLabel.normal(f"工程:{projectName}")
-            self.statusIndicator.normal()
-            self.info.normal("工程创建完毕..")
+    def questionSave(self, handle):
+        '''当要改动当前的工程项目时,优先询问是否保存'''
 
-        dialog = ProjectCreator(_create, None)
-        dialog.exec_()
+        if self.projectName is None:
+            handle()
+        else:
+            # 创建工程之前优先检查是否已经保存了当前数据，如果没有保存，优先询问是否保存当前数据
+            # 如果用户抛弃当前数据，直接进入创建阶段，否则保存当前数据并跳过创建
+            if self.checkHasSaved():
+                # 当前已经保存了
+                handle()
+            else:
+                result = QMessageBox.question(None, "创建新的工程", "当前数据还未保存, 是否存储", QMessageBox.Save|QMessageBox.Discard|QMessageBox.Cancel)
+                if result == QMessageBox.Save:
 
-    def cancelCopy(self):
-        '''取消复制'''
+                    self.saveCurrentData()
+                elif result == QMessageBox.Cancel:
 
-        self.convertTool(EditorToolType.MARQUEE)
+                    self.info.normal("取消创建副本")
+                elif result == QMessageBox.Discard:
+
+                    handle()
+
+    def _createNewInstance(self):
+        '''确认当前数据已经保存后，创建一个新的副本'''
+        filepath, filetype = QFileDialog.getOpenFileName(None, "选择瓦片查找表", filter="ZIP文件(*.zip)")
+        if len(filepath) > 0:
+            if Editor.loadTileLut(filepath):
+                def _create(projectName:str):
+                    self.projectName = projectName
+                    self.hasSaved = True
+                    self.rooms = dict()
+                    self.roomList.setRooms(self.rooms)
+                    self.statusLabel.normal(f"工程:{projectName}")
+                    self.statusIndicator.normal()
+                    self.info.normal("工程创建完毕..")
+                    Editor.resumeAll()
+                    return True
+                dialog = ProjectCreator(_create, None)
+                dialog.exec_()
+            else:
+                warning("创建副本错误", "目标查找表文件无效")
+
+    def _toEdit(self, text, tool):
+        '''将地图编辑器现有的指示器转换为编辑状态'''
+
+        self.statusIndicator.run()
+        self.rendererView.setSelectable(False)
+        if self.currentRoom != None:
+            self.currentRoom.currentLayerEntity.setLayerSelectable(False)
+        self.statusLabel.setText(text)
+        self.currentTool = tool
+        self.currentTool.work()
 
     def convertTool(self, toolType):
         '''转换当前所使用的工具 '''
@@ -2797,47 +3307,31 @@ class MapEditor(EuclidWindow):
 
         self.currentTool.done()
         if toolType == EditorToolType.PEN:
-            self.statusIndicator.run()
-            self.rendererView.setSelectable(False)
-            self.currentRoom.currentLayerEntity.setLayerSelectable(False)
-            self.statusLabel.setText("编辑->笔刷")
-            self.brushTool.work()
+            self._toEdit("编辑->笔刷", self.brushTool)
             self.brushTool.setIndicatorPos(self.posBuf)
-            self.currentTool = self.brushTool
 
         elif toolType == EditorToolType.ERASE:
-            self.statusIndicator.run()
-            self.rendererView.setSelectable(False)
-            self.currentRoom.currentLayerEntity.setLayerSelectable(False)
-            self.statusLabel.setText("编辑->橡皮")
-            self.currentTool = self.eraseTool
-            self.eraseTool.work()
+            self._toEdit("编辑->橡皮", self.eraseTool)
             self.eraseTool.setIndicatorPos(self.posBuf)
 
         elif toolType == EditorToolType.MARQUEE:
             self.statusIndicator.normal()
             self.rendererView.setSelectable(True)
-            self.currentRoom.currentLayerEntity.setLayerSelectable(True)
+            if self.currentRoom != None:
+                self.currentRoom.currentLayerEntity.setLayerSelectable(True)
             self.statusLabel.setText("调整->选框")
             self.currentTool = self.marqueeTool
             self.marqueeTool.work()
 
         elif toolType == EditorToolType.FLOODFILL:
-            self.statusIndicator.run()
-            self.rendererView.setSelectable(False)
-            self.currentRoom.currentLayerEntity.setLayerSelectable(False)
-            self.statusLabel.setText("编辑->油漆桶")
-            self.currentTool = self.floodFillTool
-            self.floodFillTool.work()
+            self._toEdit("编辑->油漆桶", self.floodFillTool)
             self.floodFillTool.setIndicatorPos(self.posBuf)
 
         elif toolType == EditorToolType.COPY:
-            self.statusIndicator.run()
-            self.rendererView.setSelectable(False)
-            self.currentRoom.currentLayerEntity.setLayerSelectable(False)
-            self.statusLabel.setText("选框->复制")
-            self.currentTool = self.copyTool
-            self.copyTool.work()
+            self._toEdit("选框->复制", self.copyTool)
+
+        elif toolType == EditorToolType.POSITION_FINDER:
+            self._toEdit("选框->房间处理", self.positionFinder)
 
     def needTile(self, tileId):
         '''检查目标数据中是否出现了瓦片ID'''
@@ -2847,10 +3341,17 @@ class MapEditor(EuclidWindow):
                 return True
         return False
 
-    def copyMarqueeBox(self):
-        '''复制当前选框中的所有内容'''
+    def _disableSelections(self):
+        '''由预览窗体调用,当进入预览窗体时, 如果当前工具是选择工具, 则禁用当前选择'''
 
+        if self.currentTool is self.marqueeTool:
+            if self.currentRoom != None:
+                self.currentRoom.currentLayerEntity.setLayerSelectable(False)
+                return True
+        return False
 
+    def _enableSelections(self):
+        self.currentRoom.currentLayerEntity.setLayerSelectable(True)
 
     # ------------- 关于房间 -----------------
 
@@ -2876,6 +3377,8 @@ class MapEditor(EuclidWindow):
         self.marqueeTool.setLayer(layer)
         self.floodFillTool.setLayer(layer)
         self.copyTool.setLayer(layer)
+        if self.currentTool is self.marqueeTool:
+            layer.setLayerSelectable(True)
 
     def onLayerDeleted(self, Id):
         '''回调函数: 当准备删除一个图层时, 执行该函数'''
@@ -2928,10 +3431,7 @@ class MapEditor(EuclidWindow):
         self.roomHelper.show()
         self.roomHelper.setTitle(title)
         self.roomHelper.move(self.pos() + QPoint(100, 100))
-        self.roomList.addRoomBtn.invalid()
-        self.roomList.adjustRoomBtn.invalid()
-        self.roomList.listView.setEnabled(False)
-        self.layerList.listView.setEnabled(False)
+        self.invalid()
 
     def onRoomBorderMaked(self, cpos1: QPoint, cpos2:QPoint):
         '''回调函数: 创建房间时, 当房间框选完毕时执行改函数
@@ -2983,11 +3483,8 @@ class MapEditor(EuclidWindow):
         
         self.currentTool.done()
         self.currentTool = self.emptyTool
+        self.resume()
         Editor.roomCreatorHelper.hide()
-        self.roomList.adjustRoomBtn.resume()
-        self.roomList.addRoomBtn.resume()
-        self.roomList.listView.setEnabled(True)
-        self.layerList.listView.setEnabled(True)
 
     def onRoomVisibleChanged(self, Id, v):
         '''当房间的是否可见改变时执行该回调函数'''
@@ -3015,7 +3512,7 @@ class MapEditor(EuclidWindow):
         if self.currentRoom is None:
             warning("调整房间大小", "请选中一个当前的房间")
         else:
-            self._recordToolOnAdjust()
+            self._recordTool()
             self.isAdjustRoom = True
             self.adjustRoom = self.currentRoom
             self.createNewRoom("调整房间")
@@ -3026,20 +3523,83 @@ class MapEditor(EuclidWindow):
         self.isAdjustRoom = False
         self.createNewRoom("创建房间")
 
-    def _recordToolOnAdjust(self):
+    def onMoveRoom(self):
+        '''移动当前房间到新的位置'''
+
+        if self.currentRoom is None:
+            self.outputError("当前没有任何房间")
+        else:
+            self._recordTool()
+            self.moveRoom = self.currentRoom
+            self.positionFinder.setBorder(self.currentRoom.roomBorder.rect().size())
+            self.positionFinder.setHandle(self._onMoveRoomConfirm)
+            self.convertTool(EditorToolType.POSITION_FINDER)
+            self.invalid()
+
+    def _onMoveRoomConfirm(self, cpos):
+        '''确认放置当前房间'''
+
+        _cpos = (cpos.x(), cpos.y())
+        _cpos2 = cpos.x() + self.moveRoom.csize[0], cpos.y() + self.moveRoom.csize[1]
+        if self.roomList.collisionExcept(self.moveRoom.name, _cpos, _cpos2):
+            # 首先确认目标位置是否会和其他房间冲突
+            warning("移动房间", "当前位置和其他房间冲突")
+        else:
+            self.moveRoom.move(_cpos)
+            self._releaseToolBuf()
+            self.resetRoomForTools(self.moveRoom)
+            Editor.roomHandler.onRoomChoosed(self.moveRoom)
+            self.resume()
+
+    def onRestoreRoom(self, room):
+        '''用模板创建一个新的房间'''
+
+        if EditorToolType.isConvertable(self.currentTool.toolType):
+            # 当前工具可以切换
+            self._recordTool()
+            self.restoredRoom = room
+            self.positionFinder.setBorder(room.rectRaw())
+            self.positionFinder.setHandle(self._onRestoreRoomConfirm)
+            self.convertTool(EditorToolType.POSITION_FINDER)
+            self.invalid()
+            self.output("右键可退出当前工具")
+        else:
+            self.outputError("当前状态不可以创建新的房间")
+
+    def _onRestoreRoomConfirm(self, cpos):
+        '''当确认房间位置时'''
+
+        p1 = cpos.x(), cpos.y()
+        p2 = p1[0] + self.restoredRoom.csize[0], p1[1] + self.restoredRoom.csize[1]
+        if self.roomList.collisionAny(p1, p2):
+            # 是否和任何房间冲突
+            warning("还原房间", "和其他房间冲突")
+        else:
+            self.roomList.restoreRoom(p1, self.restoredRoom, self, self.renderer)
+
+    def _cancelRestore(self):
+        '''停止还原'''
+
+        self.resume()
+        self._releaseToolBuf()
+
+    def _recordTool(self):
         self.toolBuf = self.currentTool.toolType
     
     def _releaseToolBuf(self):
-        self.convertTool(self.toolBuf)
-
+        if self.toolBuf != EditorToolType.NONE:
+            self.convertTool(self.toolBuf)
+        else:
+            self.convertTool(EditorToolType.MARQUEE)
+    
     # --------------- 关于事件 -----------------
     def keyPressEvent(self, ev) -> None:
         if self.currentRoom is None:
-            self.info.error("没有任何房间")
+            self.outputError("没有任何房间")
             return
 
-        if self.currentTool.toolType >= 4:
-            self.info.error("当前不可切换工具")
+        if EditorToolType.isNotConvertable(self.currentTool.toolType):
+            self.outputError("当前不可切换工具")
             return
 
         if ev.key() == Qt.Key_B:
@@ -3062,6 +3622,17 @@ class MapEditor(EuclidWindow):
             else:
                 if self.copyTool.hasCopyData:
                     self.convertTool(EditorToolType.COPY)
+        elif ev.key() == Qt.Key_Q:
+            # 移动房间
+            if not self.currentTool.canDraw:
+                if self.currentTool != self.positionFinder:
+                    self.onMoveRoom()
+            else:
+                self.outputError("当前工具正在使用中")
+        elif ev.key() == Qt.Key_Z:
+            if EditorToolType.isConvertable(self.currentTool.toolType):
+                if self.currentRoom != None:
+                    self.currentRoom.currentLayerEntity.restoreSnapshot(self, self.renderer)
 
     def onItemPressed(self, item, event):
         self.currentTool.onItemPressed(item, event)
@@ -3092,6 +3663,18 @@ class MapEditor(EuclidWindow):
     def onSelectionChanged(self):
         self.currentTool.onSelectionChanged()
 
+    def outputError(self, content):
+        '''输出错误信息'''
+        self.info.error(f"[{now()}] {content}")
+
+    def output(self, content):
+        '''输出错误信息'''
+        self.info.normal(f"[{now()}] {content}")
+
+    def outputSuccess(self, content):
+        '''输出错误信息'''
+        self.info.success(f"[{now()}] {content}")
+
     def debug(self):
         if self.currentRoom != None:
             print("- 层级瓦片数据测试 -")
@@ -3103,6 +3686,11 @@ class MapEditor(EuclidWindow):
             for tile in self.currentRoom.currentLayerEntity.tiles:
                 print(tile.cpos, tile.roomName, tile.layerName)
 
+    def debug3(self):
+        '''快照信息测试'''
+
+        print(self.currentRoom.currentLayerEntity.snapshots)
+
     def exportRoomImage(self):
         '''导出房间预览图测试'''
 
@@ -3113,7 +3701,7 @@ class MapEditor(EuclidWindow):
         '''把所有控件添加到EuclidWindow'''
 
         _func = lambda x: QSize(120, max(x.height() - 50, 100))
-        self.roomList = RoomList(self.onAdjustRoom, self.onRoomDelete, self.onRoomVisibleChanged, self.onCreateRoom, self.onRoomChoozed, _func, minsize=(120, 100))
+        self.roomList = RoomList(self.onMoveRoom, self.onAdjustRoom, self.onRoomDelete, self.onRoomVisibleChanged, self.onCreateRoom, self.onRoomChoozed, _func, minsize=(120, 100))
         self.add(self.roomList)
 
         _func = lambda x: QSize(90, max(x.height() - 50, 100))
@@ -3135,13 +3723,13 @@ class MapEditor(EuclidWindow):
         _func = lambda s: QSize(s.width(), s.height() - 17)
         c.add(EuclidElasticDocker(_func, self.rendererView, size=(100, 86)))
 
-        createBtn = EuclidButton(title="创建新的副本", callback=self.createNewInstanceProject)
+        createBtn = EuclidButton(title="创建新的副本", callback=lambda:self.questionSave(self._createNewInstance))
         restyle(createBtn, EuclidNames.BUTTON_RED)
         self.add(createBtn)
 
         self.addh(EuclidButton(size=(120, 20), title="层级瓦片数据测试", callback=self.debug))
         self.addh(EuclidButton(size=(120, 20), title="层级瓦片实体测试", callback=self.debug2))
-
+        self.addh(EuclidButton(size=(80, 20), title="图层快照测试", callback=self.debug3))
         self.addh(EuclidButton(size=(80, 20), title="导出测试", callback=self.exportRoomImage))
 
 class Layer:
@@ -3157,6 +3745,85 @@ class Layer:
         self.visible = True
         self.selectable = False
         self.sEntryPoint = QPointF(*cpos) * UNITSIZE
+        self.snapshots = collections.deque(list(), Editor.SNAPSHOT_CAPACITY)
+        self.hasChanged = False
+        self.currentSnapshot = LayerSnapshot(self)
+
+    def toJson(self) -> dict:
+        '''转换为json数据以备保存'''
+
+        tiles = list()
+        for item in self.tiles:
+            # 记录所有瓦片的位置和ID
+            tiles.append({"pos":item.cpos, "tileId":item.tileId})
+
+        return {
+            "name":self.name,
+            "pos":self.cpos,
+            "size":self.tilemap.size,
+            "index":self.index,
+            "tiles":tiles
+        }
+
+    def fromJsonInMapEditor(self, o, view, renderer):
+        '''仅从json数据中还原所有的瓦片信息, 还原的瓦片为房间瓦片'''
+
+        for tile in o["tiles"]:
+            tileId = tile["tileId"]
+            item = RoomTileItem(view, tileId, tuple(tile["pos"]), Editor.tilelut.fetchPixmap(tileId))
+            item.reposOffset(self.sEntryPoint)
+            renderer.addItem(item)
+            self.addTile(item)
+            self.tilemap.data[item.cpos[0]:item.cpos[0] + item.size[0], item.cpos[1]:item.cpos[1] + item.size[1]] = item.narr
+
+    def fromJsonAsTemplate(self, o):
+        '''将层级视为模板层级来还原'''
+
+        for tile in o["tiles"]:
+            tileId = tile["tileId"]
+            tileInfo = Editor.tilelut.fetch(tileId)
+            model = TileModel(tileId, tuple(tile["pos"]), tileInfo.pixmap)
+            self.tiles.append(model)
+            self.tilemap.data[model.cpos[0]:model.cpos[0] + tileInfo.size[1], model.cpos[1]:model.cpos[1] + tileInfo.size[1]] = tileInfo.narr
+
+    def removeSnapshotsNeedTile(self, tileId):
+        '''移除需要目标瓦片Id的层级快照'''
+
+        recycle = list()
+        for snapshot in self.snapshots:
+            if snapshot.needTile(tileId):
+                recycle.append(snapshot)
+        for s in recycle:
+            self.snapshots.remove(s)
+
+    def clearSnapshots(self):
+        '''房间大小重新调整时, snapshot必须清零'''
+        self.snapshots.clear()
+
+    def restoreSnapshot(self, view, renderer):
+        if len(self.snapshots) > 0:
+            print("恢复前一帧的快照")
+            _snapshot = self.snapshots.pop()
+            _snapshot.restore(self, view, self.sEntryPoint, renderer)
+            self.currentSnapshot = LayerSnapshot(self)
+
+    def saveSnapshot(self):
+        '''当图层数据发生改变时才会记录'''
+
+        self.snapshots.append(self.currentSnapshot)
+        self.currentSnapshot = LayerSnapshot(self)
+        print(f"记录当前快照{len(self.snapshots)}")
+
+    def saveSnapshotWhenChanged(self):
+        '''仅在发生数据改变之后再保存快照'''
+
+        if self.hasChanged:
+            self.saveSnapshot()
+            self.hasChanged = False
+
+    def isEmpty(self):
+        '''检查当前的图层是否是一个空图层'''
+        return len(self.tiles) == 0
 
     def needTile(self, tileId):
         '''检查数据中是否用到了目标瓦片'''
@@ -3168,11 +3835,8 @@ class Layer:
         _clone = Layer(self.roomName, self.name, self.cpos, csize, self.index)
         _clone.tilemap = self.tilemap.clone()
         for tile in self.tiles:
-            cp = tile.cpos[0] - self.cpos[0], tile.cpos[1] - self.cpos[1]
-            model = ModelItem(tile.tileId, cp, tile.pixmap())
-            model.setPos(QPointF(*cp) * UNITSIZE)
+            model = TileModel(tile.tileId, tile.cpos, tile.pixmap())
             _clone.tiles.append(model)
-        print(_clone.tiles)
         return _clone
 
     def adjust(self, csize:tuple, lb:tuple, rt:tuple):
@@ -3190,6 +3854,13 @@ class Layer:
         tile.setZValue(-self.index)
         tile.lastPos += self.sEntryPoint
         self.tiles.append(tile)
+        self.hasChanged = True
+
+    def removeTile(self, tile: RoomTileItem):
+        '''移除一块瓦片'''
+
+        self.tiles.remove(tile)
+        self.hasChanged = True
 
     def setLayerName(self, name):
         '''重设层级名称'''
@@ -3247,22 +3918,93 @@ class Room:
     '''记录一个房间所有的数据, 主要记录的是房间的图层级, 每一个图层就是一个
     Tilemap'''
 
-    def __init__(self, name, cpos=(0, 0), csize=(32, 32)):
+    def __init__(self, name, cpos=(0, 0), csize=(32, 32), createRoomBorder=True):
         self.name = name
 
         # 追加一个默认的层级
         self.currentLayer = "default"
         self.layerNames = [self.currentLayer]
         self.layers = {self.currentLayer:Layer(name, self.currentLayer, cpos, csize, 0)}
-
-        # 创建roomBorder
-        self.roomBorder = QGraphicsRectItem()
-        self.roomBorder.setPen(Editor.COLOR_DEFAULT_ROOMBORDER)
-        self.roomBorder.setZValue(LAST)
         
         # 记录位置和空间数据
         self.reloadData(cpos, csize)
+        if createRoomBorder:
+            self.buildBorder()
         self.visible = True
+
+    def toJson(self):
+        '''转换为JSON数据保存下来'''
+
+        layers = []
+        for name in self.layerNames:
+            layers.append({"name":name, "data":self.layers[name].toJson()})
+        return {
+            "name":self.name,
+            "pos":self.cpos,
+            "size":self.csize, 
+            "layers":layers
+        }
+
+    def fromJsonInMapEditor(self, o, view, renderer):
+        '''从JSON数据中还原一个房间, 只读取所有的层级数据
+        房间的创建需要通过上级单位来控制'''
+
+        self.layers.clear()
+        self.layerNames.clear()
+        for info in o["layers"]:
+            # 所有的层级信息
+
+            name, data = info["name"], info["data"]
+            layer = Layer(self.name, name, tuple(data["pos"]), tuple(data["size"]), data["index"])
+            layer.fromJsonInMapEditor(data, view, renderer)
+            self.layers.setdefault(name, layer)
+            self.layerNames.append(name)
+        renderer.addItem(self.roomBorder)
+
+    def fromJsonAsTemplate(self, o):
+        '''作为模板还原房间'''
+
+        self.layers.clear()
+        self.layerNames.clear()
+        for info in o["layers"]:
+            name, data = info["name"], info["data"]
+            layer = Layer(self.name, name, tuple(data["pos"]), tuple(data["size"]), data["index"])
+            layer.fromJsonAsTemplate(data)
+            self.layers.setdefault(name, layer)
+            self.layerNames.append(name)
+
+    def checkHasSaved(self):
+        '''检查当前所有的图层是否发生了变动'''
+
+        for layer in self.layers.values():
+            if not layer.tilemap.hasSaved:
+                return False
+        return True
+
+    def clearSnapshots(self, Id):
+        '''清除所有层级需要目标瓦片ID的层级'''
+        for layer in self.layers.values():
+            layer.removeSnapshotsNeedTile(Id)
+
+    def rectRaw(self):
+        '''当前房间的矩形, 只记录大小'''
+        return QRectF(0, 0, self.csize[0] * UNITSIZE, self.csize[1] * UNITSIZE)
+
+    def buildBorder(self):
+        '''创建该房间自己的border'''
+
+        self.roomBorder = QGraphicsRectItem()
+        self.roomBorder.setPen(Editor.COLOR_DEFAULT_ROOMBORDER)
+        self.roomBorder.setZValue(LAST)
+        self.roomBorder.setRect(self.cpos[0] * UNITSIZE, self.cpos[1] * UNITSIZE, self.csize[0] * UNITSIZE, self.csize[1] * UNITSIZE)
+
+    def isEmptyRoom(self):
+        '''检查当前房间是否是一个空房间'''
+
+        for layer in self.layers.values():
+            if layer.isEmpty():
+                return True
+        return False
 
     def exportPixmap(self) -> QPixmap:
         '''将房间导出为一张QPixmap数据'''
@@ -3286,10 +4028,19 @@ class Room:
                 return True
         return False
 
+    def createRoomBorder(self):
+        '''创建一个房间边框'''
+
+        item = QGraphicsRectItem()
+        item.setRect(0, 0, self.csize[0] * UNITSIZE, self.csize[1] * UNITSIZE)
+        item.setPen(Editor.COLOR_TEMPLATE_ROOMBORDER)
+        item.setZValue(LAST)
+        return item
+
     def clone(self):
         '''克隆出一个自身的副本'''
 
-        room = Room(self.name, self.cpos, self.csize)
+        room = Room(self.name, self.cpos, self.csize, createRoomBorder=False)
         room.layerNames.clear()
         room.layers.clear()
         for name in self.layerNames:
@@ -3303,18 +4054,31 @@ class Room:
         self.cpos = cpos
         self.cpos2 = (cpos[0] + csize[0], cpos[1] + csize[1])
         self.csize = csize
-        self.roomBorder.setRect(cpos[0] * UNITSIZE, cpos[1] * UNITSIZE, csize[0] * UNITSIZE, csize[1] * UNITSIZE)
 
     def adjust(self, cpos:tuple, csize:tuple, lb, rt):
         '''调整当前房间的大小信息'''
 
         srpos = QPointF(*cpos) * UNITSIZE
         self.reloadData(cpos, csize)
+        self.roomBorder.setRect(cpos[0] * UNITSIZE, cpos[1] * UNITSIZE, csize[0] * UNITSIZE, csize[1] * UNITSIZE)
         for layer in self.layers.values():
             for tile in layer.tiles:
                 tile.cpos = (tile.cpos[0] - lb[0], tile.cpos[1] - lb[1])
                 tile.reposOffset(srpos)
             layer.adjust(csize, lb, rt)
+            layer.cpos = cpos
+            layer.sEntryPoint = srpos
+            layer.clearSnapshots()
+
+    def move(self, cpos):
+        '''类似于adjust函数, 但仅移动'''
+
+        srpos = QPointF(*cpos) * UNITSIZE
+        self.reloadData(cpos, self.csize)
+        self.roomBorder.setRect(self.cpos[0] * UNITSIZE, self.cpos[1] * UNITSIZE, self.csize[0] * UNITSIZE, self.csize[1] * UNITSIZE)
+        for layer in self.layers.values():
+            for tile in layer.tiles:
+                tile.reposOffset(srpos)
             layer.cpos = cpos
             layer.sEntryPoint = srpos
 
@@ -3359,6 +4123,9 @@ class Room:
 
     def setCurrentLayer(self, name):
         '''设置当前房间被选中的图层'''
+
+        if self.currentLayer in self.layers:
+            self.layers[self.currentLayer].setLayerSelectable(False)
         self.currentLayer = name
 
     def collision(self, p1, p2):
@@ -3401,6 +4168,18 @@ class LayerList(_EuclidElasticWidget):
         self.listView.setObjectName("EditorBrushContainerList")
         self.listView.setGeometry(0, 44, 89, 100)
         self.currentRoom = None
+
+    def invalid(self):
+        '''禁用当前控件'''
+
+        self.listView.setEnabled(False)
+        self.addLayerBtn.invalid()
+
+    def resume(self):
+        '''恢复当前控件'''
+
+        self.listView.setEnabled(True)
+        self.addLayerBtn.resume()
 
     def onVisibleChanged(self, Id):
         if self.currentRoom.visible:
@@ -3460,7 +4239,7 @@ class LayerList(_EuclidElasticWidget):
 
 class RoomList(_EuclidElasticWidget):
 
-    def __init__(self, adjustRoomCallback, deleteRoomCallback, visibleCallback, createRoomCallback, callback, resizefunc, minsize=(110, 100)):
+    def __init__(self, moveRoomCB, adjustRoomCallback, deleteRoomCallback, visibleCallback, createRoomCallback, callback, resizefunc, minsize=(110, 100)):
         super().__init__(resizefunc, size=minsize)
 
         self.rooms = dict()
@@ -3475,13 +4254,39 @@ class RoomList(_EuclidElasticWidget):
         self.adjustRoomBtn.setParent(self)
         self.adjustRoomBtn.move(0, 44)
 
+        self.moveRoomBtn = EuclidButton(size=(119, 20), title="移动房间", callback=moveRoomCB)
+        self.moveRoomBtn.setParent(self)
+        self.moveRoomBtn.move(0, 69)
+
         self.listView = SimpleListWidget(self.onDataChanged, deleteRoomCallback, self.onVisibleChanged, self.onItemClicked, parent=self)
         self.listView.setObjectName("EditorBrushContainerList")
-        self.listView.setGeometry(0, 69, 119, 100)
+        self.listView.setGeometry(0, 94, 119, 100)
 
         self.callback = callback                                    # 选中房间时, 执行该函数回调
         self.visibleCB = visibleCallback
         self.isValid = False
+        self.invalid()
+
+    def clearSnapshots(self, Id):
+        '''清除目标房间中所有需要目标ID的快照'''
+        for room in self.rooms.values():
+            room.clearSnapshots(Id)
+
+    def invalid(self):
+        '''禁用当前的控件'''
+
+        self.addRoomBtn.invalid()
+        self.adjustRoomBtn.invalid()
+        self.moveRoomBtn.invalid()
+        self.listView.setEnabled(False)
+
+    def resume(self):
+        '''恢复当前的控件'''
+
+        self.addRoomBtn.resume()
+        self.adjustRoomBtn.resume()
+        self.moveRoomBtn.resume()
+        self.listView.setEnabled(True)
 
     def firstRoom(self) -> Room:
         return self.rooms[self.roomNames[0]]
@@ -3516,7 +4321,12 @@ class RoomList(_EuclidElasticWidget):
 
     def setRooms(self, rooms):
         self.rooms = rooms
-        self.isValid = self.rooms != None
+        self.listView.clear()
+        self.roomNames.clear()
+        for name in rooms.keys():
+            self.roomNames.append(name)
+            self.listView.add(name)
+        self.isValid = True
 
     def onVisibleChanged(self, Id):
         v = self.rooms[Id].changeVisible()
@@ -3558,22 +4368,60 @@ class RoomList(_EuclidElasticWidget):
         self.rooms.setdefault(room.name, room)
         self.roomNames.append(room.name)
         self.listView.add(room.name)
+        self._rechoose()
+        return room
+
+    def restoreRoom(self, cpos, room, sceneView, renderer):
+        '''从模板中还原的房间 '''
+
+        _room = Room(self.nextRoomName(), cpos, room.csize)
+        self.rooms.setdefault(_room.name, _room)
+        self.roomNames.append(_room.name)
+        self.listView.add(_room.name)
+        self._rechoose()
+
+        # 写入当前模板的瓦片数据
+        _room.layers.clear()
+        _room.layerNames.clear()
+        offset = QPointF(*cpos) * UNITSIZE
+        for idx, name in enumerate(room.layerNames):
+            layer = room.layers[name]
+            _room.layerNames.append(name)
+            _layer = Layer(_room.name, name, cpos, room.csize, idx)
+            _room.layers.setdefault(name, _layer)
+            for tile in layer.tiles:
+                item = tile.createRoomItem(sceneView, offset)
+                _layer.addTile(item)
+                renderer.addItem(item)
+            _layer.tilemap = layer.tilemap.clone()
+        renderer.addItem(_room.roomBorder)
+        return _room
+
+    def _rechoose(self):
         if self.listView.count() == 1:
             self.listView.setCurrentRow(0)
         else:
-            self.listView.setCurrentRow(self.listView.count() - 2)
-        return room
+            self.listView.setCurrentRow(self.listView.currentIndex().row())
 
     def resizeEvent(self, event) -> None:
-        self.listView.resize(119, self.height() - 69)
+        self.listView.resize(119, self.height() - 94)
         return super().resizeEvent(event)
 
 class Editor:
     '''编辑器所有主要单元'''
 
+    ALPHA = QColor(0, 0, 0, 0)
+
+    PROJECT_TEMP = "./.project"
+    PROJECT_TEMP_TILELUT_PATH = "./.project/tilelut.zip"
+    PROJECT_TEMP_PROJECT = "./.project/pj.json"
+
+    SNAPSHOT_CAPACITY = 20
+
     # 所有基础配置
     COLOR_DEFAULT_ROOMBORDER = QColor("#74adbb")
     COLOR_CHOOSED_ROOMBORDER = QColor("#66ffe3")
+    COLOR_TEMPLATE_ROOMBORDER = QColor("#ffffe4")
 
     comicFont = QFont("Zpix")
     tilelut = TileLut()                             # 瓦片查找表
@@ -3594,6 +4442,132 @@ class Editor:
     brushList = None                                # 笔刷组列表
 
     @staticmethod
+    def exportMapData():
+        '''导出地图数据'''
+
+        try:
+            path, t = QFileDialog.getSaveFileName(None, "选择导出位置", filter="JSON文件(*.json)")
+            if len(path) > 0:
+                data = Editor.mapEditor.exportMapData()
+                if data != None:
+                    with open(path, "w", encoding='utf-8') as f:
+                        json.dump(data, f)
+                    warning("导出地图数据", "导出成功!")
+        except Exception as e:
+            warning("导出失败", f"遇到异常:{e}")
+
+    @staticmethod
+    def loadTileLut(filepath):
+        '''加载瓦片查找表'''
+
+        # 提取所有的文件到本地文件夹
+        folder = "./tmp"
+        zfile = zipfile.ZipFile(filepath)
+        zfile.extractall(folder)
+
+        path = f"{folder}/lut.json"
+        if os.path.exists(path):
+            ret = False
+            with open(path, "r", encoding='utf-8') as f:
+                lut = json.load(f)
+                Editor.tilelut = TileLut()
+                if Editor.tilelut.loadFromLut(lut, folder):
+                    Editor.brushWindow.loadTileBrushes(Editor.tilelut.generateBrushes())
+                    ret = True
+                else:
+                    warning("创建副本", "无效的查找表文件")
+            zfile.close()
+            removeFolder(folder)
+            # 将目标位置的瓦片查找表复制到本地, 以备保存工程文件
+            if filepath != Editor.PROJECT_TEMP_TILELUT_PATH:
+                shutil.copyfile(filepath, Editor.PROJECT_TEMP_TILELUT_PATH)
+            return ret
+        else:
+            zfile.close()
+            warning("创建副本", "无效的查找表文件")
+            return False
+
+    @staticmethod
+    def saveProject():
+        '''保存当前的工程'''
+
+        filepath, filetype = QFileDialog.getSaveFileName(None, "选择要保存的位置", filter="ZIP文件(*.zip)")
+        if len(filepath) > 0:
+            o = {
+                "brushList":Editor.brushWindow.toJson(),
+                "roomList":Editor.mapEditor.toJson(),
+                "templateList":Editor.roomHandler.toJson()
+            }
+            with open(Editor.PROJECT_TEMP_PROJECT, "w", encoding='utf-8') as f:
+                json.dump(o, f, ensure_ascii=False)
+            zfile = zipfile.ZipFile(filepath, "w")
+            zfile.write(Editor.PROJECT_TEMP_TILELUT_PATH, "tilelut.zip")
+            zfile.write(Editor.PROJECT_TEMP_PROJECT, "pj.json")
+            zfile.close()
+
+    @staticmethod
+    def loadProject():
+        '''加载工程, 优先查看当前编辑器是否有未保存的工程'''
+
+        Editor.mapEditor.questionSave(Editor._loadProject)
+
+    @staticmethod
+    def _loadProject():
+        '''加载工程到当前编辑器'''
+
+        filepath, filetype = QFileDialog.getOpenFileName(None, "选择工程文件", filter="ZIP文件(*.zip)")
+        if len(filepath) > 0:
+            try:
+                removeFolder(Editor.PROJECT_TEMP, False)
+                zfile = zipfile.ZipFile(filepath)
+                zfile.extractall(Editor.PROJECT_TEMP)
+                if Editor.loadTileLut(Editor.PROJECT_TEMP_TILELUT_PATH):
+                    with open(Editor.PROJECT_TEMP_PROJECT, "r", encoding='utf-8') as f:
+                        pj = json.load(f)
+                        Editor.brushWindow.fromJson(pj["brushList"])
+                        Editor.mapEditor.fromJson(pj["roomList"])
+                        Editor.roomHandler.fromJson(pj["templateList"])
+                        Editor.resumeAll()
+                else:
+                    warning("加载错误", "瓦片查找表损坏")
+                zfile.close()
+            except Exception as e:
+                warning("加载错误", f"无效的工程文件:{e}")
+
+    @staticmethod
+    def invalidAll():
+        '''禁用当前跟工程数据有关的窗体, 在没有创建工程时, 这些窗体无法使用
+        1.笔刷窗体
+        2.模板窗体
+        3.地图编辑器 '''
+
+        Editor.brushWindow.invalid()
+        Editor.roomHandler.invalid()
+        Editor.mapEditor.invalid()
+
+    @staticmethod
+    def resumeAll():
+        '''在工程创建时，恢复当前窗体'''
+
+        Editor.brushWindow.resume()
+        Editor.roomHandler.resume()
+        Editor.mapEditor.resume()
+
+    @staticmethod
+    def recordSnapshot():
+        '''给当前的图层记录一帧快照'''
+
+        room = Editor.mapEditor.currentRoom
+        if room != None:
+            room.currentLayerEntity.saveSnapshot()
+
+    @staticmethod
+    def recordSnapshotWhenChanged():
+        room = Editor.mapEditor.currentRoom
+        if room != None:
+            room.currentLayerEntity.saveSnapshotWhenChanged()
+
+    @staticmethod
     def removeTile(tileId:int) -> bool:
         '''删除目标瓦片'''
 
@@ -3609,6 +4583,8 @@ class Editor:
         if Editor.roomHandler.needTile(tileId):
             warning("删除瓦片", "删除失败, 该瓦片被房间模板占用")
             return False
+        
+        Editor.mapEditor.roomList.clearSnapshots(tileId)
         Editor.tilelut._removeTile(tileId)
         return True
 
@@ -3633,14 +4609,13 @@ class Editor:
     @staticmethod
     def create(parent=None):
 
-        Editor.palette = EditorPalette(Editor.tilelut, parent=parent, paletteCanvasSize=(12, 12))
+        Editor.palette = EditorPalette(parent=parent, paletteCanvasSize=(40, 20))
         Editor.brushObserver = EditorBrushObserver(parent=parent)
-        Editor.brushWindow = EditorBrushWindow(Editor.tilelut, Editor.brushMaker, parent=parent)
+        Editor.brushWindow = EditorBrushWindow(parent=parent)
         Editor.mapEditor = MapEditor(parent=parent)
         Editor.mapEditorPreview = MapEditorRuntimePreviewWindow(Editor.mapEditor.renderer, parent=parent)
         Editor.roomHandler = RoomHandlerWindow(parent)
         Editor.roomCreatorHelper = Editor.mapEditor.createRoomCreatorHelper(parent)
-
 
         Editor.brushContainer = Editor.brushWindow.brushBoxRenderer
         Editor.brushList = Editor.brushWindow.brushBoxList
@@ -3663,30 +4638,65 @@ class Editor:
         font.setStyleStrategy(QFont.NoAntialias)
         app.setFont(font)
         QFontDatabase.addApplicationFont("./fonts/pixel.ttf")
-        with open("editorstyle.qss", encoding='utf-8') as f:
+        with open("./res/editorstyle.qss", encoding='utf-8') as f:
             app.setStyleSheet(f"{EUCLID_DEFAULT_STYLE}\n{f.read()}")
         return app
 
-class Window(QLabel):
+class Window(QMainWindow):
 
     def __init__(self):
         super().__init__(None)
+        self.setWindowTitle(f"地图编辑器_{EDITOR_VERSION}")
         self.setObjectName("EuclidBaseWindow")
         self.resize(int(1308*0.8), int(1120*0.8))
         self.build()
+        self.buildMenu()
         self.show()
+
+    def buildMenu(self):
+        '''构建主窗体菜单'''
+
+        self.menuBar = self.menuBar()
+        fileMenu = self.menuBar.addMenu("文件")
+        openAct = fileMenu.addAction("打开工程")
+        openAct.triggered.connect(Editor.loadProject)
+        saveAct = fileMenu.addAction("保存工程")
+        saveAct.triggered.connect(Editor.saveProject)
+        exportMapData = fileMenu.addAction("导出地图数据")
+        exportMapData.triggered.connect(Editor.exportMapData)
+
+        viewMenu = self.menuBar.addMenu("窗口")
+        showBrush = viewMenu.addAction("笔刷窗口")
+        showBrush.triggered.connect(Editor.brushWindow.show)
+        showPalette = viewMenu.addAction("调色盘窗口")
+        showPalette.triggered.connect(Editor.palette.show)
+        showMapEditor = viewMenu.addAction("地图编辑窗口")
+        showMapEditor.triggered.connect(Editor.mapEditor.show)
+        showTemplate = viewMenu.addAction("模板窗口")
+        showTemplate.triggered.connect(Editor.roomHandler.show)
+        showPreview = viewMenu.addAction("地图预览窗口")
+        showPreview.triggered.connect(Editor.mapEditorPreview.show)
+
+        testMenu = self.menuBar.addMenu("测试")
+        testAct1 = testMenu.addAction("测试_保存工程")
+        testAct1.triggered.connect(Editor.saveProject)
+        testAct2 = testMenu.addAction("测试_打开工程")
+        testAct2.triggered.connect(Editor.loadProject)
 
     def build(self):
         
         Editor.create(self)
+        Editor.invalidAll()
         restore_window_status(self, "./res/test.json")
 
     def test(self):
         dialog = EuclidMessageBox()
         dialog.exec()
 
-    def closeEvent(self, a0):
+    def closeEvent(self, evt):
         store_window_status(self, EuclidWindow.window_list, "./res/test.json")
+        if not Editor.mapEditor.checkHasSaved():
+            Editor.mapEditor.questionSave(lambda:evt.accept())
 
 if __name__ == '__main__':
     app = Editor.createApplication()
