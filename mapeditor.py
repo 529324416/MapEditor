@@ -1,8 +1,5 @@
 # pyqt5
 
-from curses import raw
-from pdb import post_mortem
-from stat import filemode
 from PyQt5.QtWidgets import *
 from PyQt5.QtGui import *
 from PyQt5.QtCore import *
