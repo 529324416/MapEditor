@@ -1,0 +1,1 @@
+A tilemap editor based on PyQt5
