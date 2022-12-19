@@ -1,0 +1,212 @@
+
+#EuclidMainWindow{
+
+    /* background-color:rgba(15, 15, 27, 1); */
+    background-color: #c6b7be;
+
+    border-bottom-left-radius:7px;
+    border-bottom-right-radius:7px;
+}
+#EuclidContainer{
+    background-color: rgba(0,0,0,0);
+}
+#EuclidArea{
+    background-color:#1a1c2c;
+    border:none;
+    border-radius: 5px;
+}
+#EuclidAreaAlpha{
+    background-color:#1a1c2cf3;
+    border:none;
+    border-radius: 5px;
+}
+
+
+/* WARN> 关于EuclidWindow主体 */
+#EuclidWindow{
+    background-color:#1a1c2c;
+    border-top-left-radius:7px;
+    border-top-right-radius:7px;
+    border-bottom-left-radius:7px;
+    border-bottom-right-radius:7px;
+}
+#EuclidWindowAlpha{
+    background-color:#1a1c2cab;
+    border-top-left-radius:7px;
+    border-top-right-radius:7px;
+    border-bottom-left-radius:7px;
+    border-bottom-right-radius:7px;
+}
+#EuclidTitleBar{
+    background-color: #333c57;
+    border-top-left-radius: 7px;
+    border-top-right-radius: 7px;
+}
+#EuclidTitleContent{
+    color: #fffde3;
+}
+#EuclidCloseButton{
+    background-color: #ff003c;
+    border-radius: 6px;
+}
+#EuclidCloseButton:hover{
+    background-color: #fffde3;
+}
+#EuclidLockButtonNormal{
+    background-color: #8e8e9f;
+    border-radius: 6px;
+}
+#EuclidLockButtonNormal:hover{
+    background-color: #fffde3;
+}
+#EuclidLockButtonLocked{
+    background-color: #ffbe00;
+    border-radius: 6px;
+}
+#EuclidLockButtonLocked:hover{
+    background-color: #fffde3;
+}
+#EuclidTopButtonNormal{
+    background-color: #8e8e9f;
+    border-radius: 6px;
+}
+#EuclidTopButtonNormal:hover{
+    background-color: #fffde3;
+}
+#EuclidSizeGrip{
+    border-radius: 6px;
+    background-color: #5655a6;
+}
+#EuclidSizeGrip:hover{
+    border-radius: 6px;
+    background-color: #8e8e9f;
+}
+
+/* WARN> 关于控件 */
+#EuclidCircleButton{
+    background:#666f88;
+    border-radius:8px;
+    border:none;
+}
+#EuclidCircleButton:hover{
+    background:#fffde3;
+}
+#EuclidCircleButton:pressed{
+    background:#232323;
+}
+#EuclidLabel{
+    font-family: "JetBrains Mono";
+    font-size: 16px;
+    color:#fffde3;
+}
+#EuclidButton{
+    
+    color:#fffde3;
+    border:none;
+    border-radius: 2px;
+    background: #565a75;
+}
+#EuclidButton:hover{
+    background: #c6b7be;
+}
+#EuclidButton:pressed{
+    background: #2c354d;
+}
+#EuclidButton:disabled{
+    background-color: #666f88;
+}
+#EuclidLineEdit{
+    font-family: "JetBrains Mono";
+    font-size: 16px;
+    color:#fffde3;
+    background:#2c354d;
+    border-radius:2px;
+    border:none;
+}
+#EuclidSubArea{
+
+    background-color: rgba(0,0,0,0);
+    border: 1px solid #333c57;
+    border-radius: 4px;
+}
+#EuclidSubAreaContainer{
+    background-color: rgba(0,0,0,0);
+    border-radius: 4px;
+    border: none;
+}
+#EuclidListView{
+
+    background-color: rgba(0,0,0,0);
+    border: 1px solid #282a2f;
+    border-radius: 4px;
+}
+#EuclidRoundPictureBox{
+
+    border: none;
+    border-radius: 4px;
+}
+#EuclidLineEditor{
+
+    color: #fffde3;
+    border-radius: 2px;
+    background-color: rgba(0, 0, 0, 0);
+    border:1px solid grey;
+    selection-background-color: rgba(0, 0, 0, 255);
+}
+#EuclidView{
+    border: 1px solid #5655a6;
+    border-radius: 6px;
+    background-color: rgba(0, 0, 0, 0);
+}
+#EuclidScene{
+    border: none;
+    border-radius: 6px;
+    background-color: rgba(0, 0, 0, 0);
+}
+
+
+
+/* about type */
+/* QScrollArea{
+    background-color: rgba(0, 0, 0, 0);
+} */
+QScrollBar:vertical{
+    border:none;
+    width:10px;
+    border-radius:0px;
+    margin:0px 0px 0px 0px;
+    background-color:rgba(0,0,0,0);
+}
+QScrollBar::handle:vertical{
+    background-color:#5e5e6c;
+    border-radius:5px;
+}
+QScrollBar::handle:vertical:hover{
+    background-color:#43434f;
+}
+QScrollBar::handle:vertical:pressed{
+    background-color:#5e5e6c;
+}
+QScrollBar::sub-line:vertical{
+    border:none;
+    height:0px;
+    subcontrol-position:top;
+    subcontrol-origin:margin;
+}
+QScrollBar::add-line:vertical{
+    border:none;
+    height:0px;
+    subcontrol-position:bottom;
+    subcontrol-origin:margin;
+}
+
+QScrollBar::up-arrow:vertical, QScrollBar::down-arrow:vertical{
+    background:none;
+}
+QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical{
+    background:none;
+}
+QMessageBox{
+    background-color: #1a1c2c;
+
+}

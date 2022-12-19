@@ -1,0 +1,62 @@
+/* DOC> 全局信息 */
+QLabel{
+    color: #fffde3;
+}
+
+
+
+/*  关于Brush Window */
+#EditorLabel{
+    border:1px solid #8e8e9f;
+    border-radius: 4px;
+}
+#EditorLabel:hover{
+    border: 1px solid #00ffa5;
+}
+#EditorLabelChoosed{
+    border: 1px solid #ff003c;
+    border-radius: 4px;
+}
+
+#EditorListBox{
+    background-color: rgba(0, 0, 0, 0);
+    /* border:1px solid #2a2b37; */
+    border-radius:2px;
+    color:#ffffeb;
+    outline:none;
+    font-family:zpix;
+    text-align:center;
+}
+#EditorListBox::item{
+    background: rgba(0, 0, 0, 0);
+    border:none;
+    height:25px;
+}
+#EditorListBox::item:hover{
+    background: rgba(150, 150, 150, 100);
+}
+#EditorListBox::item:selected{
+    background: rgba(120, 120, 120, 100);
+    border:none;
+}
+#EditorListBox::item:selected:active{
+    background: rgba(113, 113, 113, 100);
+    border:none;
+}
+#EditorListBox::item:selected:disabled{
+    background: rgba(120, 120, 120, 100);
+    border:none;
+    color:#fffde3;
+}
+#EditorListBox::item:alternate{
+    background: #EEEEEE;
+    border:none;
+}
+
+
+#EditorTileBox{
+
+    background-color: rgba(0, 0, 0, 0);
+    border:none;
+    border-radius: 6px;
+}
