@@ -115,6 +115,24 @@
 #EuclidButton:disabled{
     background-color: #666f88;
 }
+
+#EuclidButtonRed{
+    
+    color:#fffde3;
+    border:none;
+    border-radius: 2px;
+    background: #ff003c;
+}
+#EuclidButtonRed:hover{
+    background: #c6b7be;
+}
+#EuclidButtonRed:pressed{
+    background: #2c354d;
+}
+#EuclidButtonRed:disabled{
+    background-color: #666f88;
+}
+
 #EuclidLineEdit{
     font-family: "JetBrains Mono";
     font-size: 16px;

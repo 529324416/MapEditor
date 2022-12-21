@@ -1,5 +1,7 @@
 import os
 import time
+import copy
+import json
 import queue
 
 def read(filepath:str) -> str:
@@ -13,6 +15,12 @@ def save(cnt:str, filepath:str) -> None:
 
     with open(filepath, "w", encoding='utf-8') as f:
         f.write(cnt)
+
+def save_json(obj:dict, filepath:str) -> None:
+    '''存储一个dict到指定的JSON文件中'''
+
+    with open(filepath, "w", encoding='utf-8') as f:
+        json.dump(obj, f)
 
 def now():
     '''以默认的格式[hh:mm:ss]获取当前的时间信息'''
@@ -47,6 +55,23 @@ class Counter:
     def __init__(self, entry=0):
         self._id = entry
         self._queue = queue.Queue()
+
+    @property
+    def json(self):
+        '''将计数器存储为JSON数据'''
+
+        _queue = copy.copy(self._queue)
+        recycleList = list()
+        for i in range(_queue.qsize()):
+            recycleList.append(_queue.get())
+
+        # while _queue.not_empty:
+        #     recycleList.append(_queue.get())
+        return {
+            "currentId":self._id,
+            "recycleList":recycleList
+        }
+
 
     @property
     def next_id(self):

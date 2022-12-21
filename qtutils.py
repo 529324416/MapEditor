@@ -5,6 +5,14 @@ from PyQt5.QtWidgets import *
 from PyQt5.QtCore import *
 from PyQt5.QtGui import *
 
+def savefile(caption="打开文件",filter="json文件(*.json)") -> list:
+    '''获取单个文件'''
+
+    filename, filetypes = QFileDialog.getSaveFileName(None, caption=caption, filter=filter)
+    if len(filename) == 0:
+        return None
+    return filename
+
 def openfiles(caption="打开文件",filter="png文件(*.png)", folder="./") -> list:
     '''获取一组文件'''
 

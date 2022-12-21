@@ -11,6 +11,7 @@ from Editor import *
 from EditorData import ProjectData, Tile
 from EditorTools import *
 import qtutils
+import utils
 import numpy as np
 
 class TileItem(QGraphicsPixmapItem):
@@ -82,6 +83,17 @@ class TilemapBuffer:
                 self.tilemap.setdefault((x, y), None)
         self._tilemap = np.zeros(size, dtype=np.int32)
 
+    @property
+    def json(self):
+        '''将层级数据转换为JSON数据,结构为'''
+
+        output = []
+        for x in range(self.width):
+            for y in range(self.height):
+                v = self._tilemap[x, y]
+                if v != 0:output.append([x, y, int(self._tilemap[x, y])])
+        return output
+
     def show(self):
         '''打印地图数据'''
 
@@ -101,6 +113,18 @@ class RoomBuffer:
         self.layers.setdefault("Scaff", TilemapBuffer("Scaff", size))
         self.layers.setdefault("Decorator", TilemapBuffer("Decorator", size))
         self.__saved = False
+
+    @property
+    def json(self):
+        '''将房间数据转换为JSON数据'''
+
+        layers = dict()
+        for name, value in self.layers.items():
+            layers.setdefault(name, value.json)
+        return {
+            "size":[self.width, self.height],
+            "layers":layers
+        }
 
     @property
     def hasSaved(self):
@@ -199,11 +223,6 @@ class RoomDrawingBuffer:
         self.scene.removeItem(self.border)
         for name,layer in self.layers.items():
             self.scene.removeItem(layer)
-
-    def save(self, project: ProjectData):
-        '''保存当前正在绘制的房间数据'''
-
-        self.clear()
 
     def chooselayer(self, layerName:str):
         '''选择一个层级的时候执行该回调函数'''
@@ -347,6 +366,14 @@ class RoomDrawingBuffer:
             for item in self._clear_tile_in_layer(tileId, tilemap):
                 layerGroup.removeFromGroup(item)
 
+    def setLayerVisible(self, name:str) -> bool:
+        '''set if layer visible if layer is not visible, otherwise 
+        set invisible'''
+
+        group = self.layers[name]
+        group.setVisible(not group.isVisible())
+        return group.isVisible()
+
     def debug_pointstr(self,x) -> str:
         return f"({x.x()},{x.y()})"
 
@@ -373,10 +400,12 @@ class EditorMapWindow(EuclidWindow):
 
         #DOC> 创建LayerList和Button
         self.layerList = EditorListBox()
+        self.layerList.elemClicked.connect(self.on_layerList_elemClicked)
+        self.layerList.elemButtonClicked.connect(self.on_layerList_elemBtnClicked)
         self.btn_createroom = EuclidButton(text="新建房间", callback=self.trycreateroom)
+        self.btn_showmarquee = EuclidButton(text="导出地图数据", callback=self.printmarqueedata)
         self.btn_testbtn = EuclidButton(text="打印地图数据", callback=self.printroomdata)
-        self.btn_showmarquee = EuclidButton(text="打印选框数据", callback=self.printmarqueedata)
-
+        
         #DOC> 建立布局
         self.addh(self.message, 150, 20)
         self.addh(self.btn_pen, 50, 20)
@@ -519,7 +548,6 @@ class EditorMapWindow(EuclidWindow):
             self.on_project_tileChoosed(self.project.currentTile)
 
             # DOC> 链接所有的槽函数|所有槽函数必须在MapWindow中定义
-            self.layerList.elemClicked.connect(self.on_layerList_elemClicked)
             self.project.tileChoosed.connect(self.on_project_tileChoosed)
             self.project.tileRemoved.connect(self.on_project_tileRemoved)
 
@@ -544,10 +572,14 @@ class EditorMapWindow(EuclidWindow):
     def printmarqueedata(self):
         '''打印选框中的数据'''
 
-        if self.roomBuffer != None:
-            item = QGraphicsPixmapItem(QPixmap("./临时背景1.png"))
-            self.scene.addItem(item)
-            item.setPos(self.roomBuffer.roomScenePos + QPointF(0, -self.roomBuffer.room.height * self.project.tileh))
+        if self.roomBuffer is None:
+            qtutils.information(None, "导出地图数据", "当前没有建立房间")
+        else:
+            filepath = qtutils.savefile("导出地图数据")
+            if filepath != None:
+                obj = self.project.to_json()
+                obj.setdefault("room", self.roomBuffer.room.json)
+                utils.save_json(obj, filepath)
 
     def choose_tile(self, tileId:int, pixmap:QPixmap):
         '''分离出来主要是因为选取瓦片的方式不止从瓦片库选择一种，还可以用滴灌来选取'''
@@ -581,7 +613,17 @@ class EditorMapWindow(EuclidWindow):
     def on_layerList_elemClicked(self, name:str) -> None:
         '''当选中一个层级时执行该函数'''
 
-        self.roomBuffer.chooselayer(name)
+        if self.roomBuffer != None:
+            self.roomBuffer.chooselayer(name)
+
+    @pyqtSlot(str)
+    def on_layerList_elemBtnClicked(self, name:str) -> None:
+        '''当一个层级的按钮被点击的时候'''
+
+        if self.roomBuffer != None:
+            value = self.roomBuffer.setLayerVisible(name)
+            item = self.layerList.fetch(name)
+            restyle(item.button, EUCLID_BUTTON if value else EUCLID_BUTTON_RED)
 
     @pyqtSlot(QPointF, QPoint)
     def on_pentool_drawMoved(self, scenepos:QPointF, gridpos:QPoint):

@@ -280,6 +280,7 @@ class EditorListBox(EuclidListView):
     def __init__(self, parent=None):
         super().__init__(parent=parent)
         self.setObjectName("EditorListBox")
+        self._items = dict()
 
     def _onChoosed(self, name):
         self.elemClicked.emit(name)
@@ -300,7 +301,15 @@ class EditorListBox(EuclidListView):
         for text in texts:
             self.add(text)
 
-    def add(self, name):
+    def clear(self):
+        super().clear()
+        self._items.clear()
+
+    def fetch(self, name:str) -> EditorListItem:
+        if name in self._items:
+            return self._items[name]
+
+    def add(self, name) -> None:
         '''添加一个新的元素'''
 
         item = EditorListItem(name, self._onRenamed, self._onDeleted, self._onChoosed, self._onReceived)
@@ -311,6 +320,7 @@ class EditorListBox(EuclidListView):
         self.addItem(holder)
         self.setItemWidget(holder, item)
         self.setCurrentItem(holder)
+        self._items.setdefault(name, item)
 
 
 class EditorView(EuclidView):

@@ -45,6 +45,11 @@ class TileLib:
         self.tiles = list()
         self.tileIds = set()
 
+    def to_json(self):
+        '''将瓦片库转换为JSON数据'''
+
+        return self.name, [tile.tileId for tile in self.tiles]
+
     def add(self, tile:Tile) -> bool:
         '''增加瓦片数据'''
 
@@ -94,7 +99,7 @@ class TileManager:
 
         # DOC> 瓦片名 > 瓦片实体
         self.tiles = dict()
-        self.tilesById = dict()
+        # self.tilesById = dict()
 
         self.libs = list()
         self.libCounter = utils.Counter(entry=1)
@@ -153,7 +158,7 @@ class TileManager:
         # TODO> 检查是否有地图或者笔刷数据引用了这块瓦片
         self.counter.recycle(tile.tileId)
         self.tiles.pop(tile.tileName)
-        self.tilesById.pop(tile.tileId)
+        # self.tilesById.pop(tile.tileId)
 
     def create(self, file:str):
         '''根据给定的文件创建一个新的瓦片数据'''
@@ -172,7 +177,7 @@ class TileManager:
                 return False
             tile = Tile(self.counter.next_id, name, pixmap, file)
             self.tiles.setdefault(tile.tileName, tile)
-            self.tilesById.setdefault(tile.tileId, tile)
+            # self.tilesById.setdefault(tile.tileId, tile)
             self.currentlib.add(tile)
             return True
         except:
@@ -190,6 +195,28 @@ class TileManager:
             if not self.create(filename):
                 failed_list.append(filename)
         return True, failed_list
+
+    def to_json(self):
+        '''将所有的瓦片转换为一个JSON数据,它将以查找表的形式存在,通过瓦片Id查找瓦片名称,并且该数据还会记录自身的回收列表情况'''
+
+        _tiles = dict()
+        for k, v in self.tiles.items():
+            _tiles.setdefault(k, v.to_json())
+        tiles = {
+            "counter":self.counter.json,
+            "tiles":_tiles
+        }
+        _libs = dict()
+        for lib in self.libs:
+            _libs.setdefault(*lib.to_json())
+        libs = {
+            "counter":self.libCounter.json,
+            "libs":_libs
+        }
+        return {
+            "tiles":tiles,
+            "libs":libs
+        }
 
 
 class Tilemap:
@@ -290,6 +317,9 @@ class ProjectData(QObject):
             self.tileManager.removeTile(tile)
             self.tileRemoved.emit(tile)
             return lib.render_infos
+
+    def to_json(self):
+        return {"tileManager":self.tileManager.to_json()}
 
     @property
     def currentTile(self):
