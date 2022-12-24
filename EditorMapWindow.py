@@ -403,8 +403,8 @@ class EditorMapWindow(EuclidWindow):
         self.layerList.elemClicked.connect(self.on_layerList_elemClicked)
         self.layerList.elemButtonClicked.connect(self.on_layerList_elemBtnClicked)
         self.btn_createroom = EuclidButton(text="新建房间", callback=self.trycreateroom)
-        self.btn_showmarquee = EuclidButton(text="导出地图数据", callback=self.printmarqueedata)
-        self.btn_testbtn = EuclidButton(text="打印地图数据", callback=self.printroomdata)
+        self.btn_showmarquee = EuclidButton(text="导出地图数据", callback=self.export_current_room)
+        self.btn_testbtn = EuclidButton(text="导出地图图片", callback=self.export_room_image)
         
         #DOC> 建立布局
         self.addh(self.message, 150, 20)
@@ -419,8 +419,15 @@ class EditorMapWindow(EuclidWindow):
 
         #DOC> 其他初始化设置
         self.disable()
-        self.tool = None
-        self._lst_tool = None
+        self.tool = FakeTool()
+        self.last_tool = FakeTool()
+        self.pentool = None
+        self.erasertool = None
+        self.copytool = None
+        self.roomTool = None
+        self.emptyTool = None
+        self.movetool = None
+        self.marqueetool = None
         self.project = None
         self.roomBuffer = None
         self.scene_label = QGraphicsTextItem("hello world")
@@ -471,9 +478,9 @@ class EditorMapWindow(EuclidWindow):
             return False
 
         if self.tool.toolType >= 0 or ignore_type:
-            self._lst_tool = self.tool
+            self.last_tool = self.tool
             self.usetool(tool)
-            tool.updatePosition(self._lst_tool.indicator.pos())
+            tool.updatePosition(self.last_tool.indicator.pos())
             return True
         return False
 
@@ -563,13 +570,29 @@ class EditorMapWindow(EuclidWindow):
         else:
             qtutils.information(None, "创建房间", "房间尺寸无效")
 
-    def printroomdata(self):
-        '''打印当前的房间的当前层级数据'''
+    def export_room_image(self):
+        '''将当前房间作为一张图导出'''
 
-        if self.roomBuffer != None:
-            self.roomBuffer._show_current_mapdata()
+        if self.roomBuffer is None:
+            qtutils.information(None, "导出地图图片", "当前没有建立房间")
+            return
+        filepath = qtutils.savefile("导出地图数据",filter="png文件(*.png)")
+        if filepath is None:
+            return
+        tilew, tileh = self.roomBuffer.tilesize
+        buffer = QPixmap(self.roomBuffer.room.width * tilew, self.roomBuffer.room.height * tileh)
+        buffer.fill(QColor("#00000000"))
+        painter = QPainter()
+        painter.begin(buffer)
+        for layer, tilemap in self.roomBuffer.room.layers.items():
+            for pos, tile in tilemap.tilemap.items():
+                if tile is None:
+                    continue
+                painter.drawPixmap(pos[0] * tilew, buffer.height() - pos[1] * tileh, tilew, tileh, tile.pixmap())
+        painter.end()
+        buffer.save(filepath)
 
-    def printmarqueedata(self):
+    def export_current_room(self):
         '''打印选框中的数据'''
 
         if self.roomBuffer is None:
@@ -590,7 +613,7 @@ class EditorMapWindow(EuclidWindow):
 
     @property
     def lastTool(self):
-        return self._lst_tool if self._lst_tool != None else self.emptyTool
+        return self.last_tool if self.last_tool != None else self.emptyTool
 
     # WARN> 所有的槽函数
     @pyqtSlot(Tile)

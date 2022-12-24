@@ -47,6 +47,11 @@ class EditorTileWindow(EuclidWindow):
         设置所有部件的回调函数,以及渲染工程中的瓦片库信息'''
 
         self.project = project
+        self.tileContainer.clear()
+        self.tileliblist.clear()
+        for lib in self.project.tileManager.libs:
+            self.tileliblist.add(lib.name)
+
 
     def addlib(self) -> None:
         '''追加一个新的瓦片库'''

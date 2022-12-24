@@ -57,6 +57,27 @@ class ToolHelper:
         item.setPen(QPen(color, width, style))
         return item
 
+class FakeTool:
+    '''提供一组类似于原工具的接口,但没有任何功能'''
+    def __init__(self):
+        pass
+    def useTool(self):
+        pass
+    def stopTool(self):
+        pass
+    def onEnter(self, event: QEnterEvent):
+        pass
+    def onLeave(self, event: QEvent):
+        pass
+    def onClick(self, event:QMouseEvent, isMovingScene:bool):
+        pass
+    def onMove(self, event: QMouseEvent):
+        pass
+    def onRelease(self, event: QMouseEvent):
+        pass
+
+
+
 class ITool(QObject):
     '''Tool接口, 用于定义Tool的基本行为'''
 

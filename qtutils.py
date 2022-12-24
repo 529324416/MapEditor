@@ -5,7 +5,7 @@ from PyQt5.QtWidgets import *
 from PyQt5.QtCore import *
 from PyQt5.QtGui import *
 
-def savefile(caption="打开文件",filter="json文件(*.json)") -> list:
+def savefile(caption="打开文件",filter="json文件(*.json)") -> str:
     '''获取单个文件'''
 
     filename, filetypes = QFileDialog.getSaveFileName(None, caption=caption, filter=filter)
