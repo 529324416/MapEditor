@@ -30,6 +30,8 @@ class EditorTileWindow(EuclidWindow):
         self.btn_makenew = EuclidButton(text="新建库", callback=self.addlib)
         self.btn_import = EuclidButton(text="导入瓦片", callback=self.importtiles)
         self.btn_removetile = EuclidButton(text="删除当前瓦片", callback=self.removetile)
+        self.btn_export = EuclidButton(text="测试导出瓦片", callback=self.export)
+        self.btn_load = EuclidButton(text="测试加载瓦片", callback=self.load)
         self.choosedName = None
         self.setup()
 
@@ -41,8 +43,10 @@ class EditorTileWindow(EuclidWindow):
         self.addv(self.btn_makenew)
         self.addh(self.btn_import)
         self.addh(self.btn_removetile)
+        self.addh(self.btn_export)
+        self.addh(self.btn_load)
 
-    def initproject(self, project: ProjectData):
+    def load_project(self, project: ProjectData):
         '''根据给定的工程文件来初始化窗体
         设置所有部件的回调函数,以及渲染工程中的瓦片库信息'''
 
@@ -51,7 +55,7 @@ class EditorTileWindow(EuclidWindow):
         self.tileliblist.clear()
         for lib in self.project.tileManager.libs:
             self.tileliblist.add(lib.name)
-
+        self.tileContainer.render(project.tileManager.currentlib.render_infos)
 
     def addlib(self) -> None:
         '''追加一个新的瓦片库'''
@@ -124,3 +128,20 @@ class EditorTileWindow(EuclidWindow):
 
         if self.project is None:return
         self.project.choosetile(index)
+
+    def export(self):
+        '''测试导出所有的瓦片数据'''
+
+        if self.project != None:
+            utils.save_json(self.project.json, "./test.json")
+
+    def load(self):
+        '''测试加载被导出的瓦片数据'''
+
+        # if self.project != None:
+        #     data = json.loads(utils.read("./test.json"))
+        #     self.project.create(data)
+        #     self.initproject(self.project)
+
+        data = json.loads(utils.read("./test.json"))
+        self.load_project(ProjectData.load_fromjson(data)[0])

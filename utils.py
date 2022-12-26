@@ -19,8 +19,8 @@ def save(cnt:str, filepath:str) -> None:
 def save_json(obj:dict, filepath:str) -> None:
     '''存储一个dict到指定的JSON文件中'''
 
-    with open(filepath, "w", encoding='utf-8') as f:
-        json.dump(obj, f)
+    content = json.dumps(obj).encode("utf-8").decode("unicode-escape")
+    save(content, filepath)
 
 def now():
     '''以默认的格式[hh:mm:ss]获取当前的时间信息'''
@@ -56,6 +56,14 @@ class Counter:
         self._id = entry
         self._queue = queue.Queue()
 
+    def load_json(self, data):
+        '''从json数据中恢复counter的状态'''
+
+        self._id = data["currentId"]
+        self._queue = queue.Queue()
+        for value in data["recycleList"]:
+            self._queue.put(value)
+
     @property
     def json(self):
         '''将计数器存储为JSON数据'''
@@ -71,7 +79,6 @@ class Counter:
             "currentId":self._id,
             "recycleList":recycleList
         }
-
 
     @property
     def next_id(self):

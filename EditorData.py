@@ -12,27 +12,28 @@ import numpy as np
 class Tile:
     '''单块瓦片数据'''
 
-    def __init__(self, tileId:int, tileName:str, pixmap:QPixmap, filepath:str):
+    def __init__(self, tileId:int, tileName:str, pixmap:QPixmap, filepath:str, refcount=1):
         '''初始化单块瓦片数据'''
 
         self.tileId = tileId
         self.tileName = tileName
         self.filepath = filepath
         self.pixmap = pixmap
-        self.refcount = 1
+        self.refcount = refcount
 
         # 编辑器认为瓦片可以直接作为笔刷来绘画
         self.brushdata = np.array([[tileId]])
 
-    def to_json(self):
+    @property
+    def json(self):
         '''将该瓦片的数据转换为JSON结构'''
 
         return {
             "id":self.tileId,
             "name":self.tileName,
-            "filepath":self.filepath
+            "filepath":self.filepath,
+            "refcount":self.refcount
         }
-
 
 class TileLib:
     '''描述一个瓦片库/一个瓦片库可以具有多个瓦片但每个瓦片只会有一个'''
@@ -44,11 +45,6 @@ class TileLib:
         self.libid = libid
         self.tiles = list()
         self.tileIds = set()
-
-    def to_json(self):
-        '''将瓦片库转换为JSON数据'''
-
-        return self.name, [tile.tileId for tile in self.tiles]
 
     def add(self, tile:Tile) -> bool:
         '''增加瓦片数据'''
@@ -99,7 +95,6 @@ class TileManager:
 
         # DOC> 瓦片名 > 瓦片实体
         self.tiles = dict()
-        # self.tilesById = dict()
 
         self.libs = list()
         self.libCounter = utils.Counter(entry=1)
@@ -196,95 +191,132 @@ class TileManager:
                 failed_list.append(filename)
         return True, failed_list
 
-    def to_json(self):
+    @property
+    def json(self):
         '''将所有的瓦片转换为一个JSON数据,它将以查找表的形式存在,通过瓦片Id查找瓦片名称,并且该数据还会记录自身的回收列表情况'''
 
-        _tiles = dict()
-        for k, v in self.tiles.items():
-            _tiles.setdefault(k, v.to_json())
         tiles = {
             "counter":self.counter.json,
-            "tiles":_tiles
+            "tiles":[v.json for v in self.tiles.values()]
         }
         _libs = dict()
         for lib in self.libs:
-            _libs.setdefault(*lib.to_json())
-        libs = {
-            "counter":self.libCounter.json,
-            "libs":_libs
-        }
+            _libs.setdefault(lib.name, {"tiles":[_.tileId for _ in lib.tiles],"libId":lib.libid})
         return {
             "tiles":tiles,
-            "libs":libs
+            "libs":{
+                "counter":self.libCounter.json,
+                "libs":_libs
+            }
         }
 
+    def load_json(self, obj: dict) -> int:
+        '''从json数据中恢复当前的tileManager'''
 
-class Tilemap:
-    '''一个地图层级信息/也可以直接视为层级数据'''
+        jsonTile = obj["tiles"]
+        missingCount = 0
+        self.counter.load_json(jsonTile["counter"])
+        namelut = dict()
+        for tileinfo in jsonTile["tiles"]:
+            try:
+                pixmap = QPixmap(tileinfo["filepath"])
+                tmp = Tile(tileinfo["id"], tileinfo["name"], pixmap, tileinfo["filepath"], tileinfo["refcount"])
+                self.tiles.setdefault(tmp.tileName, tmp)
+                namelut.setdefault(tmp.tileId, tmp.tileName)
+            except:
+                missingCount += 1
 
-    def __init__(self, name, size):
-        '''创建一个新的Tilemap'''
+        jsonLib = obj["libs"]
+        self.libCounter.load_json(jsonLib["counter"])
+        for name, lib in jsonLib["libs"].items():
+            tmp = TileLib(lib["libId"], name)
+            for tileId in lib["tiles"]:
+                tile = self.tiles.get(namelut[tileId])
+                if tile != None:
+                    tmp.add(tile)
+            self.libs.append(tmp)
+            self.currentlib = tmp
+        return missingCount
+            
 
-        self.name = name
-        self.data = np.zeros(size, dtype=np.int32)
 
-    def draw(self, data: np.ndarray, pos: QPoint):
-        '''绘制一块区域'''
 
-        self.data[
-            pos.x():pos.x() + data.shape[0],
-            pos.y():pos.y() + data.shape[1]
-        ] = data
 
-    def show(self):
-        '''打印地图数据'''
+# class Tilemap:
+#     '''一个地图层级信息/也可以直接视为层级数据'''
 
-        print(np.flip(self.data.transpose(1, 0), 0))
+#     def __init__(self, name, size):
+#         '''创建一个新的Tilemap'''
 
-    def _drawpoint(self, data: np.ndarray, pos: QPoint) -> bool:
-        '''绘制单点数据/使用该函数必须确保data的维度为1x1'''
+#         self.name = name
+#         self.data = np.zeros(size, dtype=np.int32)
 
-        x, y = pos.x(), pos.y()
-        if x >= 0 and x < self.data.shape[0]:
-            if y >= 0 and y < self.data.shape[1]:
-                if self.data[x, y] != data:
-                    self.data[x, y] = data
-                    return True
-        return False
+#     def draw(self, data: np.ndarray, pos: QPoint):
+#         '''绘制一块区域'''
 
-    def _erasepoint(self, pos: QPoint) -> None:
-        '''擦除单点数据'''
+#         self.data[
+#             pos.x():pos.x() + data.shape[0],
+#             pos.y():pos.y() + data.shape[1]
+#         ] = data
 
-        self.data[pos.x(), pos.y()] = 0
+#     def show(self):
+#         '''打印地图数据'''
 
-class Room:
-    '''房间信息,一个房间拥有背景/基底/支架/装饰层四个层级,依次覆盖之前的层级'''
+#         print(np.flip(self.data.transpose(1, 0), 0))
 
-    def __init__(self, size:tuple) -> None:
+#     def _drawpoint(self, data: np.ndarray, pos: QPoint) -> bool:
+#         '''绘制单点数据/使用该函数必须确保data的维度为1x1'''
 
-        self.size = size
-        self.layers = [
-            Tilemap("Background", size),
-            Tilemap("Base", size),
-            Tilemap("Scaff", size),
-            Tilemap("Decroator", size)
-        ]
-        self.currentLayer = self.layers[0]
-        self.hasSaved = False
+#         x, y = pos.x(), pos.y()
+#         if x >= 0 and x < self.data.shape[0]:
+#             if y >= 0 and y < self.data.shape[1]:
+#                 if self.data[x, y] != data:
+#                     self.data[x, y] = data
+#                     return True
+#         return False
 
-    def findLayer(self, name:str) -> Tilemap:
-        '''寻找一个层级'''
+#     def _erasepoint(self, pos: QPoint) -> None:
+#         '''擦除单点数据'''
 
-        for layer in self.layers:
-            if layer.name == name:
-                return layer
-        return None
+#         self.data[pos.x(), pos.y()] = 0
+
+# class Room:
+#     '''房间信息,一个房间拥有背景/基底/支架/装饰层四个层级,依次覆盖之前的层级'''
+
+#     def __init__(self, size:tuple) -> None:
+
+#         self.size = size
+#         self.layers = [
+#             Tilemap("Background", size),
+#             Tilemap("Base", size),
+#             Tilemap("Scaff", size),
+#             Tilemap("Decroator", size)
+#         ]
+#         self.currentLayer = self.layers[0]
+#         self.hasSaved = False
+
+#     def findLayer(self, name:str) -> Tilemap:
+#         '''寻找一个层级'''
+
+#         for layer in self.layers:
+#             if layer.name == name:
+#                 return layer
+#         return None
 
 
 
 class ProjectData(QObject):
     '''工程文件
     1.管理编辑器所有的数据信息'''
+
+    @staticmethod
+    def load_fromjson(data:dict):
+        '''从json文件中恢复所有的数据'''
+
+        tilesize = tuple(data["tilesize"])
+        project = ProjectData(tilesize)
+        missingCount = project.tileManager.load_json(data["tileManager"])
+        return project, missingCount
 
     tileChoosed = pyqtSignal(Tile)
     tileRemoved = pyqtSignal(Tile)
@@ -318,8 +350,12 @@ class ProjectData(QObject):
             self.tileRemoved.emit(tile)
             return lib.render_infos
 
-    def to_json(self):
-        return {"tileManager":self.tileManager.to_json()}
+    @property
+    def json(self):
+        return {
+            "tileManager":self.tileManager.json,
+            "tilesize":[self.tilew, self.tileh]
+        }
 
     @property
     def currentTile(self):

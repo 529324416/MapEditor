@@ -63,7 +63,7 @@ class MapEditorMainWindow(QMainWindow):
             if valid:
                 self.project = ProjectData(tilesize)
                 self.roomEditor.initproject(self.project)
-                self.tileWindow.initproject(self.project)
+                self.tileWindow.load_project(self.project)
         self.createProjectWindow.startup(_)
 
     def setup(self):
@@ -103,7 +103,7 @@ class MapEditorMainWindow(QMainWindow):
 
         self.project = ProjectData()
         self.roomEditor.initproject(self.project)
-        self.tileWindow.initproject(self.project)
+        self.tileWindow.load_project(self.project)
 
 if __name__ == '__main__':
 
