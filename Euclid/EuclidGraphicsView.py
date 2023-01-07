@@ -46,6 +46,7 @@ class EuclidSceneGrid(QGraphicsScene):
         @lcellsize: 一个大的格子的边长是多少个小格子'''
 
         super().__init__(parent=parent)
+        self.size = size
         self.setSceneRect(-size[0]//2, -size[1]//2, size[0], size[1])                   # 设置scene的大小
         self.setBackgroundBrush(bgcolor)                                                # 设置背景笔刷色彩
         self.cellw,self.cellh = cellsize                                                        # 网格尺寸
@@ -79,6 +80,15 @@ class EuclidSceneGrid(QGraphicsScene):
         for y in range(top,b,self.largeCellH):
             lines.append(QLine(l,y,r,y))
         painter.setPen(self.pen_hv)
+        painter.drawLines(*lines)
+
+        halfWidth = int(self.size[0]/2)
+        halfHeight = int(self.size[1]/2)
+        lines = [
+            QLine(0, -halfHeight, 0, halfHeight),
+            QLine(-halfWidth, 0, halfWidth, 0)
+        ]
+        painter.setPen(QColor("#00ffa5"))
         painter.drawLines(*lines)
 
 class EuclidView(QGraphicsView):
