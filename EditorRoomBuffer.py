@@ -152,7 +152,7 @@ class RoomDrawingBuffer:
         tileId, pixmap = tile_info
         if data is None:
             item = TileItem(tileId, pixmap)
-            item.setPos(scenepos)
+            item.setPos(scenepos + QPointF(0, self.tilesize[1] - pixmap.height()))
             self.__current_tilemap.tilemap[pos] = item
             self.__current_tilemap._tilemap[pos[0], pos[1]] = tileId
             self.__current_group.addToGroup(item)

@@ -16,7 +16,6 @@ from qtutils import *
 from EditorBrushWindow import *
 from EditorTileWindow import *
 from EditorMapWindow import *
-from EditorRoomWindow import *
 from EditorProjectCreator import *
 from EditorData import *
 

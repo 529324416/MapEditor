@@ -8,6 +8,11 @@ import utils
 import qtutils
 import numpy as np
 
+
+from EditorRoomBuffer import *
+
+
+
 # WARN> 关于瓦片
 class Tile:
     '''单块瓦片数据'''
@@ -168,8 +173,9 @@ class TileManager:
                 self.currentlib.add(tile)
                 return True
             pixmap = QPixmap(file)
-            if pixmap.size() != self.tilesize:
-                return False
+            # DOC> 不限制瓦片的大小
+            # if pixmap.size() != self.tilesize:
+            #     return False
             tile = Tile(self.counter.next_id, name, pixmap, file)
             self.tiles.setdefault(tile.tileName, tile)
             # self.tilesById.setdefault(tile.tileId, tile)
@@ -237,72 +243,6 @@ class TileManager:
             self.libs.append(tmp)
             self.currentlib = tmp
         return missingCount
-            
-
-
-
-
-# class Tilemap:
-#     '''一个地图层级信息/也可以直接视为层级数据'''
-
-#     def __init__(self, name, size):
-#         '''创建一个新的Tilemap'''
-
-#         self.name = name
-#         self.data = np.zeros(size, dtype=np.int32)
-
-#     def draw(self, data: np.ndarray, pos: QPoint):
-#         '''绘制一块区域'''
-
-#         self.data[
-#             pos.x():pos.x() + data.shape[0],
-#             pos.y():pos.y() + data.shape[1]
-#         ] = data
-
-#     def show(self):
-#         '''打印地图数据'''
-
-#         print(np.flip(self.data.transpose(1, 0), 0))
-
-#     def _drawpoint(self, data: np.ndarray, pos: QPoint) -> bool:
-#         '''绘制单点数据/使用该函数必须确保data的维度为1x1'''
-
-#         x, y = pos.x(), pos.y()
-#         if x >= 0 and x < self.data.shape[0]:
-#             if y >= 0 and y < self.data.shape[1]:
-#                 if self.data[x, y] != data:
-#                     self.data[x, y] = data
-#                     return True
-#         return False
-
-#     def _erasepoint(self, pos: QPoint) -> None:
-#         '''擦除单点数据'''
-
-#         self.data[pos.x(), pos.y()] = 0
-
-# class Room:
-#     '''房间信息,一个房间拥有背景/基底/支架/装饰层四个层级,依次覆盖之前的层级'''
-
-#     def __init__(self, size:tuple) -> None:
-
-#         self.size = size
-#         self.layers = [
-#             Tilemap("Background", size),
-#             Tilemap("Base", size),
-#             Tilemap("Scaff", size),
-#             Tilemap("Decroator", size)
-#         ]
-#         self.currentLayer = self.layers[0]
-#         self.hasSaved = False
-
-#     def findLayer(self, name:str) -> Tilemap:
-#         '''寻找一个层级'''
-
-#         for layer in self.layers:
-#             if layer.name == name:
-#                 return layer
-#         return None
-
 
 
 class ProjectData(QObject):
@@ -328,6 +268,7 @@ class ProjectData(QObject):
         self.tilesize = tilesize
         self.tilew,self.tileh = tilesize
         self.tileManager = TileManager(tilesize)
+        # self.dungeon = None
 
         self.__current_tile = None
 
@@ -365,17 +306,3 @@ class ProjectData(QObject):
     def hasSaved(self):
         return False
 
-
-if __name__ == '__main__':
-    '''测试'''
-
-    # import sys
-    # from PyQt5.QtWidgets import *
-    # app = QApplication(sys.argv)
-    # manager = TileManager()
-    # tile = manager.create("./Res/test.png")
-
-
-    # brushManager = BrushManager()
-    # print(brushManager.create_brush_fromtile(tile)._brush_id)
-    # sys.exit(app.exec_())

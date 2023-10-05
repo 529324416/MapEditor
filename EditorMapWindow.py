@@ -15,8 +15,6 @@ from EditorTools import *
 import qtutils
 import utils
 
-
-
 class RoomCreatorHelper(EuclidWindow):
     '''房间创建器辅助工具'''
 
@@ -114,8 +112,6 @@ class EditorMapWindow(EuclidWindow):
         self.marqueetool = None
         self.project = None
         self.roomBuffer = None
-        self.scene_label = QGraphicsTextItem("hello world")
-        self.scene_label.setDefaultTextColor(EditorColor.TEXT_COLOR)
 
     def initproject(self, project: ProjectData):
         '''根据给定的工程文件来初始化GraphicsScene'''
